@@ -33,7 +33,7 @@ An Android-based music player app built using Java, offering users the ability t
 
 ### Prerequisites
 - [Android Studio](https://developer.android.com/studio) installed.
-- An Android device or emulator with API level 21 or higher.
+- An Android device or emulator with API level 34 or higher.
 
 ### Steps
 
