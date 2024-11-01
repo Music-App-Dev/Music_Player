@@ -13,6 +13,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -40,12 +41,24 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     static ArrayList<MusicFiles> albums = new ArrayList<>();
     static boolean shuffleBoolean = false, repeatBoolean = false;
     private String MY_SORT_PREF = "SortOrder";
+    public static final String MUSIC_FILE_LAST_PLAYED = "LAST_PLAYED";
+    public static final String MUSIC_FILE = "STORED_MUSIC";
+    public static boolean SHOW_MINI_PLAYER = false;
+
+    public static String PATH_TO_FRAG = null;
+    public static String ARTIST_TO_FRAG = null;
+    public static String SONG_TO_FRAG = null;
+    public static final String ARTIST_NAME = "ARTIST_NAME";
+    public static final String SONG_NAME = "SONG_NAME";
 
     @Override
     protected void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        permission();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permission();
+        }
+
     }
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
@@ -234,5 +247,27 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             this.recreate();
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        SharedPreferences preferences = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE);
+        String path = preferences.getString(MUSIC_FILE, null);
+        String artist = preferences.getString(ARTIST_NAME, null);
+        String song = preferences.getString(SONG_NAME, null);
+
+        if(path != null){
+            SHOW_MINI_PLAYER = true;
+            PATH_TO_FRAG = path;
+            ARTIST_TO_FRAG = artist;
+            SONG_TO_FRAG = song;
+
+        } else {
+            SHOW_MINI_PLAYER = false;
+            PATH_TO_FRAG = null;
+            ARTIST_TO_FRAG = null;
+            SONG_TO_FRAG = null;
+        }
     }
 }

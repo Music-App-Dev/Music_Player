@@ -7,7 +7,7 @@ import android.os.Build;
 
 public class ApplicationClass extends Application {
     public static final String CHANNEL_ID_1 = "channel1";
-    public static final String CHANNEL_ID_2 = "channel1";
+    public static final String CHANNEL_ID_2 = "channel2";
     public static final String ACTION_PREVIOUS = "actionprevious";
     public static final String ACTION_NEXT = "actionnext";
     public static final String ACTION_PLAY = "actionplay";
