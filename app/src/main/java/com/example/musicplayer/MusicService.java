@@ -98,11 +98,15 @@ public class MusicService extends Service implements  MediaPlayer.OnCompletionLi
             if(musicFiles != null){
                 createMediaPlayer(position);
                 mediaPlayer.start();
+                Intent intent = new Intent("MUSIC_PLAYING");
+                sendBroadcast(intent);
             }
         }
         else {
             createMediaPlayer(position);
             mediaPlayer.start();
+            Intent intent = new Intent("MUSIC_PLAYING");
+            sendBroadcast(intent);
         }
     }
 
