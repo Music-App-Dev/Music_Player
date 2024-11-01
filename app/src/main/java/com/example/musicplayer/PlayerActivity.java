@@ -24,6 +24,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -67,7 +68,7 @@ public class PlayerActivity extends AppCompatActivity
     static ArrayList<MusicFiles> listSongs = new ArrayList<>();
     static Uri uri;
     private Handler handler = new Handler();
-    private Thread playThread, prevThread, nextThread, backThread;
+    private Thread playThread, prevThread, nextThread;
     MusicService musicService;
 
 
@@ -170,17 +171,25 @@ public class PlayerActivity extends AppCompatActivity
 
     @Override
     protected void onResume() {
+        super.onResume();
         Intent intent = new Intent(this, MusicService.class);
         bindService(intent, this, BIND_AUTO_CREATE);
         playThreadBtn();
         nextThreadBtn();
         prevThreadBtn();
-        super.onResume();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        if (musicService != null && musicService.isPlaying()) {
+            // Save the current song position in SharedPreferences
+            SharedPreferences sharedPreferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putInt("savedPosition", musicService.getCurrentPosition());
+            editor.putInt("currentSong", position);  // Store the current song position as well
+            editor.apply();
+        }
         unbindService(this);
     }
 
@@ -535,6 +544,15 @@ public class PlayerActivity extends AppCompatActivity
         MusicService.MyBinder myBinder = (MusicService.MyBinder) service;
         musicService = myBinder.getService();
         musicService.setCallBack(this);
+
+        SharedPreferences sharedPreferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
+        int savedPosition = sharedPreferences.getInt("savedPosition", -1);
+        int savedSong = sharedPreferences.getInt("currentSong", -1);
+
+        if (savedPosition != -1 && savedSong == position) {
+            musicService.seekTo(savedPosition);  // Seek to saved position
+        }
+
         musicService.showNotification(R.drawable.ic_pause);
         seekBar.setMax(musicService.getDuration() / 1000);
         metaData(uri);
