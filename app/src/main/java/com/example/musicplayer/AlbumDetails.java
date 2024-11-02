@@ -1,7 +1,5 @@
 package com.example.musicplayer;
 
-import static com.example.musicplayer.MainActivity.musicFiles;
-
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -20,8 +18,8 @@ public class AlbumDetails extends AppCompatActivity {
 
     RecyclerView recyclerView;
     ImageView albumPhoto, backBtn;
-    String albumName;
-    ArrayList<MusicFiles> albumSongs = new ArrayList<>();
+    String albumName, albumId;
+    ArrayList<SpotifyTrack> albumSongs = new ArrayList<>();
     AlbumDetailsAdapter albumDetailsAdapter;
     TextView albumTopName;
 
@@ -29,30 +27,23 @@ public class AlbumDetails extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_album_details);
+
         recyclerView = findViewById(R.id.recylcerView);
         albumPhoto = findViewById(R.id.albumPhoto);
         backBtn = findViewById(R.id.back_btn_album);
-        albumName = getIntent().getStringExtra("albumName");
-        albumTopName = findViewById(R.id.album_details_album_name);
 
+        albumName = getIntent().getStringExtra("albumName");
+        albumId = getIntent().getStringExtra("albumId");
+
+        albumTopName = findViewById(R.id.album_details_album_name);
         albumTopName.setText(albumName);
-        int j = 0;
-        for(int i = 0; i< musicFiles.size(); i++){
-            if(albumName.equals(musicFiles.get(i).getAlbum())){
-                albumSongs.add(j, musicFiles.get(i));
-                j++;
-            }
-        }
-        byte[] image = getAlbumArt(albumSongs.get(0).getPath());
-        if(image != null){
-            Glide.with(this)
-                    .load(image)
-                    .into(albumPhoto);
-        } else {
-            Glide.with(this)
-                    .load(R.drawable.gradient_bg)
-                    .into(albumPhoto);
-        }
+
+        albumDetailsAdapter = new AlbumDetailsAdapter(this, albumSongs);
+        recyclerView.setAdapter(albumDetailsAdapter);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        // Fetch album details from Spotify API
+        fetchSpotifyAlbumDetails(albumId);
 
         backBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -60,8 +51,42 @@ public class AlbumDetails extends AppCompatActivity {
                 finish();  // This will close the activity and return to the previous screen
             }
         });
+    }
+
+    private void fetchSpotifyAlbumDetails(String albumId) {
+        SpotifyApiHelper.fetchAlbumTracks(this, albumId, new SpotifyApiHelper.SpotifyAlbumCallback() {
+            @Override
+            public void onSuccess(ArrayList<SpotifyTrack> tracks, String albumArtUrl) {
+                albumSongs.clear();
+                albumSongs.addAll(tracks);
+                albumDetailsAdapter.notifyDataSetChanged();  // Notify adapter of data change
 
 
+                // Load album art using Glide
+                if (albumArtUrl != null && !albumArtUrl.isEmpty()) {
+                    Glide.with(AlbumDetails.this)
+                            .load(albumArtUrl)
+                            .into(albumPhoto);
+                } else {
+                    Glide.with(AlbumDetails.this)
+                            .load(R.drawable.gradient_bg)  // Placeholder image if no album art available
+                            .into(albumPhoto);
+                }
+
+                setupRecyclerView();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                // Handle error (e.g., display a toast or log error)
+            }
+        });
+    }
+
+    private void setupRecyclerView() {
+        albumDetailsAdapter = new AlbumDetailsAdapter(this, albumSongs);
+        recyclerView.setAdapter(albumDetailsAdapter);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this, RecyclerView.VERTICAL, false));
     }
 
     @Override

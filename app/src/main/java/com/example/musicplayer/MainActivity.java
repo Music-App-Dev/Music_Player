@@ -50,6 +50,10 @@ import com.spotify.sdk.android.auth.AuthorizationClient;
 import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
@@ -59,8 +63,8 @@ import okhttp3.Response;
 public class MainActivity extends AppCompatActivity implements SearchView.OnQueryTextListener {
 
     public static final int REQUEST_CODE = 1;
-    static ArrayList<MusicFiles> musicFiles;
-    static ArrayList<MusicFiles> albums = new ArrayList<>();
+    static ArrayList<SpotifyTrack> musicFiles = new ArrayList<>();
+    static ArrayList<SpotifyAlbum> albums = new ArrayList<>();
     static boolean shuffleBoolean = false, repeatBoolean = false;
     private String MY_SORT_PREF = "SortOrder";
     public static final String MUSIC_FILE_LAST_PLAYED = "LAST_PLAYED";
@@ -76,6 +80,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
     private static final String REDIRECT_URI = "com.example.musicplayer://callback";
     private SpotifyAppRemote spotifyAppRemote;
+    private AlbumFragment albumFragment;
+    private ViewPagerAdapter viewPagerAdapter;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -87,6 +93,12 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             permission();
         }
         startSpotifyAuth();
+        initViewPager();
+
+        String accessToken = getAccessToken(this);
+        if (accessToken != null) {
+            loadSpotifyData();  // Fetch albums and tracks immediately if already authenticated
+        }
     }
 
 
@@ -94,26 +106,21 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
 
-        // Extract the token from the URI in the redirect
         Uri uri = intent.getData();
         if (uri != null && uri.toString().startsWith(REDIRECT_URI)) {
             AuthorizationResponse response = AuthorizationResponse.fromUri(uri);
 
             switch (response.getType()) {
                 case TOKEN:
-                    // Token retrieved successfully; now you can use it to make Spotify Web API calls
                     String accessToken = response.getAccessToken();
-                    Log.d("MainActivity", "Access Token: " + accessToken);
+                    Log.d("MainActivity", "Access Token received: " + accessToken);
                     saveAccessToken(accessToken);
+                    loadSpotifyData();  // Ensure data is loaded after token retrieval
+                    connectToSpotify();
                     break;
 
                 case ERROR:
-                    // Handle the error response
                     Log.e("MainActivity", "Authorization error: " + response.getError());
-                    break;
-
-                default:
-                    // Handle other response types if necessary
                     break;
             }
         }
@@ -124,6 +131,11 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putString("access_token", token);
         editor.apply();
+    }
+
+    public static String getAccessToken(Context context) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        return sharedPreferences.getString("access_token", null); // Returns null if the token isn't stored
     }
 
     private void getUserSavedAlbums() {
@@ -146,8 +158,27 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (response.isSuccessful()) {
                     String responseData = response.body().string();
-                    Log.d("MainActivity", "Albums data: " + responseData);
-                    // Parse JSON and update UI to show albums
+                    try {
+                        JSONObject jsonObject = new JSONObject(responseData);
+                        JSONArray items = jsonObject.getJSONArray("items");
+                        ArrayList<SpotifyAlbum> albumList = new ArrayList<>();
+
+                        for (int i = 0; i < items.length(); i++) {
+                            JSONObject albumObject = items.getJSONObject(i).getJSONObject("album");
+                            String albumName = albumObject.getString("name");
+                            String artistName = albumObject.getJSONArray("artists").getJSONObject(0).getString("name");
+                            String imageUrl = albumObject.getJSONArray("images").getJSONObject(0).getString("url");
+                            String albumId = albumObject.getString("id");
+
+                            albumList.add(new SpotifyAlbum(albumName, artistName, imageUrl, albumId));
+                        }
+
+                        // Update UI with the albumList data (e.g., update a RecyclerView)
+                        runOnUiThread(() -> displayAlbums(albumList));
+
+                    } catch (JSONException e) {
+                        Log.e("MainActivity", "Failed to parse album JSON", e);
+                    }
                 } else {
                     Log.e("MainActivity", "Failed with response code: " + response.code());
                 }
@@ -155,80 +186,111 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         });
     }
 
-    private void getUserSavedTracks() {
-        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
-        String accessToken = sharedPreferences.getString("access_token", null);
 
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url("https://api.spotify.com/v1/me/tracks")
-                .addHeader("Authorization", "Bearer " + accessToken)
+    private void displayAlbums(ArrayList<SpotifyAlbum> albumList) {
+        albums.clear();
+        albums.addAll(albumList);
+        Log.d("MainActivity", "Displaying " + albums.size() + " albums.");
+
+        // Log each album's details
+//        for (int i = 0; i < albumList.size(); i++) {
+//            SpotifyAlbum album = albumList.get(i);
+//            Log.d("AlbumInfo", "Album " + (i + 1) + ":");
+//            Log.d("AlbumInfo", "  Name: " + album.getAlbumName());
+//            Log.d("AlbumInfo", "  Artist: " + album.getArtistName());
+//            Log.d("AlbumInfo", "  Image URL: " + album.getImageUrl());
+//            Log.d("AlbumInfo", "  Album ID: " + album.getAlbumId());
+//        }
+
+        // Check if AlbumFragment exists and update its data
+        AlbumFragment albumFragment = (AlbumFragment) viewPagerAdapter.getFragment(1);
+        if (albumFragment != null) {
+            albumFragment.updateAlbumList(albums);
+        }
+    }
+
+    private void connectToSpotify() {
+        ConnectionParams connectionParams = new ConnectionParams.Builder(CLIENT_ID)
+                .setRedirectUri(REDIRECT_URI)
+                .showAuthView(true)
                 .build();
-
-        client.newCall(request).enqueue(new Callback() {
+        SpotifyAppRemote.connect(this, connectionParams, new Connector.ConnectionListener() {
             @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("MainActivity", "Failed to fetch tracks", e);
+            public void onConnected(SpotifyAppRemote remote) {
+                spotifyAppRemote = remote;
+                Log.d("MainActivity", "Connected to Spotify");
+
+                // Pass spotifyAppRemote to MusicService for playback control
+                Intent serviceIntent = new Intent(MainActivity.this, MusicService.class);
+                MusicService.setSpotifyAppRemote(spotifyAppRemote);
+                startService(serviceIntent);
             }
 
             @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    String responseData = response.body().string();
-                    Log.d("MainActivity", "Tracks data: " + responseData);
-                    // Parse JSON and update UI to show tracks
-                } else {
-                    Log.e("MainActivity", "Failed with response code: " + response.code());
-                }
+            public void onFailure(Throwable error) {
+                Log.e("MainActivity", "Failed to connect to Spotify", error);
             }
         });
     }
-    protected void startSpotifyAuth() {
-        AuthorizationRequest.Builder builder =
-                new AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI);
 
-        builder.setScopes(new String[]{"streaming"});
-        AuthorizationRequest request = builder.build();
+    private void displayTracks(ArrayList<SpotifyTrack> trackList) {
+        musicFiles.clear();
+        musicFiles.addAll(trackList);
+        Log.d("MainActivity", "Displaying " + musicFiles.size() + " tracks.");
 
-        AuthorizationClient.openLoginInBrowser(this, request);
+        SongsFragment songsFragment = (SongsFragment) viewPagerAdapter.getFragment(0);
+        if (songsFragment != null) {
+            songsFragment.updateMusicList(trackList);
+        } else {
+            Log.e("MainActivity", "SongsFragment is not available to update.");
+        }
+    }
+    private void loadSpotifyData() {
+        getUserSavedAlbums();
+        loadSpotifyTracks();
     }
 
-
+    protected void startSpotifyAuth() {
+        AuthorizationRequest.Builder builder = new AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI);
+        builder.setScopes(new String[]{"streaming", "user-library-read"});
+        AuthorizationRequest request = builder.build();
+        AuthorizationClient.openLoginActivity(this, REQUEST_CODE, request);
+    }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-        if (spotifyAppRemote != null) {
-            SpotifyAppRemote.disconnect(spotifyAppRemote);
-            spotifyAppRemote = null; // Clear reference to prevent accidental access
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE) {
+            AuthorizationResponse response = AuthorizationClient.getResponse(resultCode, data);
+            switch (response.getType()) {
+                case TOKEN:
+                    String accessToken = response.getAccessToken();
+                    Log.d("MainActivity", "Access Token received: " + accessToken);
+                    saveAccessToken(accessToken);
+                    connectToSpotify();
+                    loadSpotifyData();
+                    break;
+                case ERROR:
+                    Log.e("MainActivity", "Authorization error: " + response.getError());
+                    Toast.makeText(this, "Authorization failed: " + response.getError(), Toast.LENGTH_LONG).show();
+                    break;
+                default:
+                    Log.e("MainActivity", "Unknown response type: " + response.getType());
+                    Toast.makeText(this, "Authorization response type: " + response.getType(), Toast.LENGTH_LONG).show();
+                    break;
+            }
         }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     private void permission() {
-        List<String> permissions = new ArrayList<>();
-
-        // Add permissions based on the files your app needs to access
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
-                != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(Manifest.permission.READ_MEDIA_IMAGES);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO)
-                != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(Manifest.permission.READ_MEDIA_VIDEO);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
+        ArrayList<String> permissions = new ArrayList<>();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             permissions.add(Manifest.permission.READ_MEDIA_AUDIO);
         }
-
-        // Request permissions if necessary
         if (!permissions.isEmpty()) {
-            ActivityCompat.requestPermissions(this,
-                    permissions.toArray(new String[0]),
-                    REQUEST_CODE);
+            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), REQUEST_CODE);
         } else {
-            musicFiles = getAllAudio(this);
             initViewPager();
         }
     }
@@ -246,7 +308,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             }
 
             if (allPermissionsGranted) {
-                musicFiles = getAllAudio(this);
+                loadSpotifyTracks();
                 initViewPager();
             } else {
                 Toast.makeText(this, "Permission Denied. Some features may not work.", Toast.LENGTH_SHORT).show();
@@ -257,9 +319,13 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     private void initViewPager() {
         ViewPager viewPager = findViewById(R.id.viewpager);
         TabLayout tabLayout = findViewById(R.id.tab_layout);
-        ViewPagerAdapter viewPagerAdapter = new ViewPagerAdapter(getSupportFragmentManager());
+        viewPagerAdapter = new ViewPagerAdapter(getSupportFragmentManager());
+
+        // Initialize albumFragment and add it to ViewPager
+        albumFragment = new AlbumFragment();
         viewPagerAdapter.addFragments(new SongsFragment(), "Songs");
-        viewPagerAdapter.addFragments(new AlbumFragment(), "Albums");
+        viewPagerAdapter.addFragments(albumFragment, "Albums");
+
         viewPager.setAdapter(viewPagerAdapter);
         tabLayout.setupWithViewPager(viewPager);
     }
@@ -272,6 +338,10 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             super(fm);
             this.fragments = new ArrayList<>();
             this.titles = new ArrayList<>();
+        }
+
+        public Fragment getFragment(int position) {
+            return fragments.get(position);
         }
 
         void addFragments(Fragment fragment, String title){
@@ -296,54 +366,63 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         }
     }
 
-    public ArrayList<MusicFiles> getAllAudio(Context context){
-        SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
-        String sortOrder = preferences.getString("sorting", "sortByName");
-        ArrayList<String> duplicate = new ArrayList<>();
-        albums.clear();
-        ArrayList<MusicFiles> tempAudioList = new ArrayList<>();
-        String order = null;
-        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        if(sortOrder.equals("sortByName")){
-            order = MediaStore.MediaColumns.DISPLAY_NAME + " ASC";
-        }   else if(sortOrder.equals("sortByDate")){
-            order = MediaStore.MediaColumns.DATE_ADDED + " ASC";
-        }   else if(sortOrder.equals("sortByDuration")){
-            order = MediaStore.MediaColumns.SIZE + " DESC";
-        }
-        String[] projection = {
-                MediaStore.Audio.Media.ALBUM,
-                MediaStore.Audio.Media.TITLE,
-                MediaStore.Audio.Media.DURATION,
-                MediaStore.Audio.Media.DATA,
-                MediaStore.Audio.Media.ARTIST,
-                MediaStore.Audio.Media._ID,
-        };
-        Cursor cursor = context.getContentResolver().query(uri, projection, null, null, order);
-        if(cursor != null){
-            while(cursor.moveToNext()){
-                String album = cursor.getString(0);
-                String title = cursor.getString(1);
-                String duration = cursor.getString(2);
-                String path = cursor.getString(3);
-                String artist = cursor.getString(4);
-                String id = cursor.getString(5);
-                MusicFiles musicFiles = new MusicFiles(path, title, artist, album, duration, id);
-                Log.e("Path: " + path, "Album:" +album);
-                tempAudioList.add(musicFiles);
-                if(!duplicate.contains(album)){
-                    albums.add(musicFiles);
-                    duplicate.add(album);
-                }
-            }
-            cursor.close();
+    private void loadSpotifyTracks() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        if (accessToken == null) {
+            Log.e("MainActivity", "Access token is missing or invalid. Re-authentication may be required.");
+            return; // Exit if there's no valid access token
         }
 
-        // Sort list based on preference
-        if ("sortByName".equals(sortOrder)) {
-            Collections.sort(tempAudioList, (m1, m2) -> m1.getTitle().compareToIgnoreCase(m2.getTitle()));
-        }
-        return tempAudioList;
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/me/tracks")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("MainActivity", "Failed to fetch tracks", e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    String responseData = response.body().string();
+                    Log.d("MainActivity", "Spotify API Response: " + responseData);  // Log the full response
+
+                    try {
+                        JSONObject jsonObject = new JSONObject(responseData);
+                        JSONArray items = jsonObject.getJSONArray("items");
+
+                        // Initialize musicFiles and add tracks
+                        ArrayList<SpotifyTrack> muFiles = new ArrayList<>();
+                        for (int i = 0; i < items.length(); i++) {
+                            JSONObject trackObject = items.getJSONObject(i).getJSONObject("track");
+
+                            String trackName = trackObject.getString("name");
+                            String artistName = trackObject.getJSONArray("artists").getJSONObject(0).getString("name");
+                            String albumName = trackObject.getJSONObject("album").getString("name");
+                            String albumImageUrl = trackObject.getJSONObject("album").getJSONArray("images").getJSONObject(0).getString("url");
+                            String trackId = trackObject.getString("id");
+                            String duration = trackObject.getString("duration_ms");
+
+                            muFiles.add(new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId));
+                        }
+
+                        Log.d("MainActivity", "Fetched " + muFiles.size() + " tracks from Spotify.");  // Log the number of fetched tracks
+                        runOnUiThread(() -> displayTracks(muFiles));
+
+                    } catch (JSONException e) {
+                        Log.e("MainActivity", "Failed to parse track JSON", e);
+                    }
+                } else {
+                    Log.e("MainActivity", "Failed with response code: " + response.code());
+                }
+            }
+        });
     }
 
     @Override
@@ -363,9 +442,9 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     @Override
     public boolean onQueryTextChange(String newText) {
         String userInput = newText.toLowerCase();
-        ArrayList<MusicFiles> myFiles = new ArrayList<>();
-        for(MusicFiles song : musicFiles){
-            if (song.getTitle().toLowerCase().contains(userInput)){
+        ArrayList<SpotifyTrack> myFiles = new ArrayList<>();
+        for(SpotifyTrack song : musicFiles){
+            if (song.getTrackName().toLowerCase().contains(userInput)){
                 myFiles.add(song);
             }
         }

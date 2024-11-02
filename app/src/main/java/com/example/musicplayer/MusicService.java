@@ -27,23 +27,36 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.util.Consumer;
+
+import com.spotify.android.appremote.api.SpotifyAppRemote;
+import com.spotify.protocol.types.PlayerState;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
 
-public class MusicService extends Service implements  MediaPlayer.OnCompletionListener{
-    IBinder mBinder = new MyBinder();
-    MediaPlayer mediaPlayer;
-    ArrayList<MusicFiles> musicFiles = new ArrayList<>();
-    Uri uri;
-    int position = -1;
-    ActionPlaying actionPlaying;
-    MediaSessionCompat mediaSessionCompat;
+
+public class MusicService extends Service {
+    private static final String TAG = "MusicService";
+    private static SpotifyAppRemote spotifyAppRemote;
+
+    private final IBinder mBinder = new MyBinder();
+    public static ArrayList<SpotifyTrack> musicFiles = new ArrayList<>();
+    public static int position = -1;
+    private MediaSessionCompat mediaSessionCompat;
+    private ActionPlaying actionPlaying;
+
     public static final String MUSIC_FILE_LAST_PLAYED = "LAST_PLAYED";
     public static final String MUSIC_FILE = "STORED_MUSIC";
     public static final String ARTIST_NAME = "ARTIST_NAME";
     public static final String SONG_NAME = "SONG_NAME";
+
+    public class MyBinder extends Binder {
+        MusicService getService() {
+            return MusicService.this;
+        }
+    }
 
     @Override
     public void onCreate() {
@@ -57,12 +70,6 @@ public class MusicService extends Service implements  MediaPlayer.OnCompletionLi
         return mBinder;
     }
 
-    public class MyBinder extends Binder {
-        MusicService getService() {
-            return MusicService.this;
-        }
-    }
-
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
@@ -74,161 +81,166 @@ public class MusicService extends Service implements  MediaPlayer.OnCompletionLi
             }
 
             if (actionName != null) {
-                if (actionName.equals("playPause")) {
-                    playPauseButtonClicked();
-                } else if (actionName.equals("next")) {
-                    nextBtnClicked();
-                } else if (actionName.equals("previous")) {
-                    previousBtnClicked();
+                switch (actionName) {
+                    case "playPause":
+                        playPauseButtonClicked();
+                        break;
+                    case "next":
+                        nextBtnClicked();
+                        break;
+                    case "previous":
+                        previousBtnClicked();
+                        break;
                 }
             }
         } else {
-            Log.w("MusicService", "Received null intent in onStartCommand");
+            Log.w(TAG, "Received null intent in onStartCommand");
         }
-
         return START_STICKY;
     }
 
-    private void playMedia(int StartPosition) {
-        musicFiles = listSongs;
-        position = StartPosition;
-        if(mediaPlayer != null){
-            mediaPlayer.stop();
-            mediaPlayer.release();
-            if(musicFiles != null){
-                createMediaPlayer(position);
-                mediaPlayer.start();
-                Intent intent = new Intent("MUSIC_PLAYING");
-                sendBroadcast(intent);
+    // Additional methods
+    public void seekTo(int positionInMillis) {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().seekTo(positionInMillis)
+                    .setResultCallback(empty -> Log.d(TAG, "Seeked to position: " + positionInMillis))
+                    .setErrorCallback(error -> Log.e(TAG, "Error seeking to position", error));
+        }
+    }
+
+    public void subscribeToPlayerStateUpdates(Consumer<PlayerState> callback) {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().subscribeToPlayerState()
+                    .setEventCallback(callback::accept)
+                    .setErrorCallback(error -> Log.e(TAG, "Error subscribing to player state", error));
+        }
+    }
+
+    // Define a Callback interface to handle asynchronous results
+    interface Callback<T> {
+        void onResult(T result);
+    }
+
+    public void playMedia(int startPosition) {
+        if (listSongs != null && startPosition >= 0 && startPosition < listSongs.size()) {
+            musicFiles = listSongs;
+            position = startPosition;
+
+            SpotifyTrack selectedTrack = musicFiles.get(position);
+            String spotifyUri = selectedTrack.getTrackId();
+
+            if (spotifyAppRemote != null) {
+                spotifyAppRemote.getPlayerApi().play(spotifyUri)
+                        .setResultCallback(empty -> Log.d(TAG, "Playing track: " + selectedTrack.getTrackName()))
+                        .setErrorCallback(error -> Log.e(TAG, "Error playing track", error));
+            } else {
+                Log.e(TAG, "SpotifyAppRemote not connected, cannot play track.");
             }
-        }
-        else {
-            createMediaPlayer(position);
-            mediaPlayer.start();
-            Intent intent = new Intent("MUSIC_PLAYING");
-            sendBroadcast(intent);
+        } else {
+            Log.e(TAG, "Invalid position or empty playlist.");
         }
     }
 
-    void start(){
-        mediaPlayer.start();
-    }
-
-    boolean isPlaying() {
-        return mediaPlayer.isPlaying();
-    }
-
-    void stop(){
-        mediaPlayer.stop();
-    }
-    void release(){
-        mediaPlayer.release();
-    }
-    int getDuration(){
-        return mediaPlayer.getDuration();
-    }
-    void seekTo(int position){
-        mediaPlayer.seekTo(position);
-    }
-    int getCurrentPosition(){
-        return mediaPlayer.getCurrentPosition();
-    }
-    void pause(){
-        mediaPlayer.pause();
-    }
-    void createMediaPlayer(int positionInner){
-        position = positionInner;
-        Uri uri = Uri.parse(musicFiles.get(position).getPath());
-        SharedPreferences.Editor editor = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE)
-                .edit();
-        editor.putString(MUSIC_FILE, uri.toString());
-        editor.putString(ARTIST_NAME, musicFiles.get(position).getArtist());
-        editor.putString(SONG_NAME, musicFiles.get(position).getTitle());
+    private void saveLastPlayed(String trackUri) {
+        SharedPreferences.Editor editor = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
+        editor.putString(MUSIC_FILE, trackUri);
+        editor.putString(ARTIST_NAME, musicFiles.get(position).getArtistName());
+        editor.putString(SONG_NAME, musicFiles.get(position).getTrackName());
         editor.apply();
-        mediaPlayer = MediaPlayer.create(getBaseContext(), uri);
-    }
-    void OnCompleted() {
-        mediaPlayer.setOnCompletionListener(this);
     }
 
-    @Override
-    public void onCompletion(MediaPlayer mp) {
-        if(actionPlaying != null){
-            actionPlaying.nextBtnClicked();
-            if(mediaPlayer != null){
-                createMediaPlayer(position);
-                mediaPlayer.start();
-                OnCompleted();
-            }
+    void start() {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().resume();
         }
     }
 
-    void setCallBack(ActionPlaying actionPlaying){
+    void pause() {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().pause();
+        }
+    }
+
+    void stop() {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().pause();
+        }
+    }
+
+    void isPlaying(Callback<Boolean> callback) {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().subscribeToPlayerState().setEventCallback(playerState -> {
+                boolean isPlaying = !playerState.isPaused;
+                callback.onResult(isPlaying); // Pass result back to caller
+            }).setErrorCallback(error -> {
+                Log.e("MusicService", "Error fetching player state", error);
+                callback.onResult(false); // Return false if there was an error
+            });
+        } else {
+            callback.onResult(false); // If SpotifyAppRemote is null, assume not playing
+        }
+    }
+
+    public static void setSpotifyAppRemote(SpotifyAppRemote appRemote) {
+        spotifyAppRemote = appRemote;
+    }
+
+    void setCallBack(ActionPlaying actionPlaying) {
         this.actionPlaying = actionPlaying;
     }
 
-    void showNotification(int playPauseBtn){
+    void showNotification(int playPauseBtn) {
         Intent intent = new Intent(this, PlayerActivity.class);
-        PendingIntent contentIntent = PendingIntent
-                .getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
-        Intent prevIntent = new Intent(this, NotificationReceiver.class)
-                .setAction(ACTION_PREVIOUS);
-        PendingIntent prevPending = PendingIntent
-                .getBroadcast(this, 0, prevIntent, PendingIntent.FLAG_IMMUTABLE);
+        Intent prevIntent = new Intent(this, NotificationReceiver.class).setAction(ACTION_PREVIOUS);
+        PendingIntent prevPending = PendingIntent.getBroadcast(this, 0, prevIntent, PendingIntent.FLAG_IMMUTABLE);
 
-        Intent pauseIntent = new Intent(this, NotificationReceiver.class)
-                .setAction(ACTION_PLAY);
-        PendingIntent pausePending = PendingIntent
-                .getBroadcast(this, 0, pauseIntent, PendingIntent.FLAG_IMMUTABLE);
+        Intent pauseIntent = new Intent(this, NotificationReceiver.class).setAction(ACTION_PLAY);
+        PendingIntent pausePending = PendingIntent.getBroadcast(this, 0, pauseIntent, PendingIntent.FLAG_IMMUTABLE);
 
-        Intent nextIntent = new Intent(this, NotificationReceiver.class)
-                .setAction(ACTION_NEXT);
-        PendingIntent nextPending = PendingIntent
-                .getBroadcast(this, 0, nextIntent, PendingIntent.FLAG_IMMUTABLE);
+        Intent nextIntent = new Intent(this, NotificationReceiver.class).setAction(ACTION_NEXT);
+        PendingIntent nextPending = PendingIntent.getBroadcast(this, 0, nextIntent, PendingIntent.FLAG_IMMUTABLE);
 
-        byte[] picture = getAlbumArt(musicFiles.get(position).getPath());
-
-        Bitmap thumb = picture != null ? BitmapFactory.decodeByteArray(picture, 0, picture.length)
-                : BitmapFactory.decodeResource(getResources(), R.drawable.gradient_bg);
-
+        SpotifyTrack currentTrack = musicFiles.get(position);
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID_2)
                 .setSmallIcon(playPauseBtn)
-                .setLargeIcon(thumb)
-                .setContentTitle(musicFiles.get(position).getTitle())
-                .setContentText(musicFiles.get(position).getArtist())
+                .setContentTitle(currentTrack.getTrackName())
+                .setContentText(currentTrack.getArtistName())
                 .addAction(R.drawable.ic_skip_previous, "Previous", prevPending)
                 .addAction(playPauseBtn, "Pause", pausePending)
                 .addAction(R.drawable.ic_skip_next, "Next", nextPending)
-                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
-                        .setMediaSession(mediaSessionCompat.getSessionToken()))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOnlyAlertOnce(true)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build();
 
-            startForeground(5, notification);
+        startForeground(5, notification);
     }
 
-    private byte[] getAlbumArt(String uri){
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(uri.toString());
-        return retriever.getEmbeddedPicture();
-    }
-    void nextBtnClicked(){
+    void nextBtnClicked() {
         if (actionPlaying != null) {
             actionPlaying.nextBtnClicked();
         }
     }
-    void playPauseButtonClicked(){
+
+    void playPauseButtonClicked() {
         if (actionPlaying != null) {
             actionPlaying.playPauseBtnClicked();
         }
     }
+
     void previousBtnClicked() {
         if (actionPlaying != null) {
             actionPlaying.prevBtnClicked();
         }
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (spotifyAppRemote != null) {
+            SpotifyAppRemote.disconnect(spotifyAppRemote);
+        }
+    }
 }
