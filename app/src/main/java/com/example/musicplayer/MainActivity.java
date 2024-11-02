@@ -33,10 +33,28 @@ import androidx.fragment.app.FragmentPagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
 import com.google.android.material.tabs.TabLayout;
+import com.spotify.android.appremote.api.SpotifyAppRemote;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import com.spotify.android.appremote.api.ConnectionParams;
+import com.spotify.android.appremote.api.Connector;
+import com.spotify.android.appremote.api.SpotifyAppRemote;
+
+import com.spotify.protocol.client.Subscription;
+import com.spotify.protocol.types.PlayerState;
+import com.spotify.protocol.types.Track;
+import com.spotify.sdk.android.auth.AuthorizationClient;
+import com.spotify.sdk.android.auth.AuthorizationRequest;
+import com.spotify.sdk.android.auth.AuthorizationResponse;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity implements SearchView.OnQueryTextListener {
 
@@ -55,6 +73,10 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     public static final String ARTIST_NAME = "ARTIST_NAME";
     public static final String SONG_NAME = "SONG_NAME";
 
+    private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
+    private static final String REDIRECT_URI = "com.example.musicplayer://callback";
+    private SpotifyAppRemote spotifyAppRemote;
+
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
     protected void onCreate(Bundle savedInstanceState){
@@ -63,6 +85,122 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permission();
+        }
+        startSpotifyAuth();
+    }
+
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+
+        // Extract the token from the URI in the redirect
+        Uri uri = intent.getData();
+        if (uri != null && uri.toString().startsWith(REDIRECT_URI)) {
+            AuthorizationResponse response = AuthorizationResponse.fromUri(uri);
+
+            switch (response.getType()) {
+                case TOKEN:
+                    // Token retrieved successfully; now you can use it to make Spotify Web API calls
+                    String accessToken = response.getAccessToken();
+                    Log.d("MainActivity", "Access Token: " + accessToken);
+                    saveAccessToken(accessToken);
+                    break;
+
+                case ERROR:
+                    // Handle the error response
+                    Log.e("MainActivity", "Authorization error: " + response.getError());
+                    break;
+
+                default:
+                    // Handle other response types if necessary
+                    break;
+            }
+        }
+    }
+
+    private void saveAccessToken(String token) {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString("access_token", token);
+        editor.apply();
+    }
+
+    private void getUserSavedAlbums() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/me/albums")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("MainActivity", "Failed to fetch albums", e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    String responseData = response.body().string();
+                    Log.d("MainActivity", "Albums data: " + responseData);
+                    // Parse JSON and update UI to show albums
+                } else {
+                    Log.e("MainActivity", "Failed with response code: " + response.code());
+                }
+            }
+        });
+    }
+
+    private void getUserSavedTracks() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/me/tracks")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("MainActivity", "Failed to fetch tracks", e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    String responseData = response.body().string();
+                    Log.d("MainActivity", "Tracks data: " + responseData);
+                    // Parse JSON and update UI to show tracks
+                } else {
+                    Log.e("MainActivity", "Failed with response code: " + response.code());
+                }
+            }
+        });
+    }
+    protected void startSpotifyAuth() {
+        AuthorizationRequest.Builder builder =
+                new AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI);
+
+        builder.setScopes(new String[]{"streaming"});
+        AuthorizationRequest request = builder.build();
+
+        AuthorizationClient.openLoginInBrowser(this, request);
+    }
+
+
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (spotifyAppRemote != null) {
+            SpotifyAppRemote.disconnect(spotifyAppRemote);
+            spotifyAppRemote = null; // Clear reference to prevent accidental access
         }
     }
 
