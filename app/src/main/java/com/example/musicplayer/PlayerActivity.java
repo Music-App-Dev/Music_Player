@@ -1,17 +1,18 @@
 package com.example.musicplayer;
 
 import static com.example.musicplayer.AlbumDetailsAdapter.albumFiles;
+import static com.example.musicplayer.MainActivity.REQUEST_CODE;
 import static com.example.musicplayer.MainActivity.repeatBoolean;
 import static com.example.musicplayer.MainActivity.shuffleBoolean;
 import static com.example.musicplayer.MusicAdapter.mFiles;
-import static com.spotify.sdk.android.auth.AccountsQueryParameters.CLIENT_ID;
-import static com.spotify.sdk.android.auth.AccountsQueryParameters.REDIRECT_URI;
 
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import androidx.core.content.ContextCompat;
+import androidx.palette.graphics.Palette;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -21,6 +22,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,15 +38,20 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 
+import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.BitmapImageViewTarget;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
+import com.spotify.sdk.android.auth.AuthorizationClient;
+import com.spotify.sdk.android.auth.AuthorizationRequest;
+import com.spotify.sdk.android.auth.AuthorizationResponse;
 
 import java.util.ArrayList;
 import java.util.Random;
@@ -62,23 +70,55 @@ public class PlayerActivity extends AppCompatActivity
     private MusicService musicService;
     private SpotifyAppRemote spotifyAppRemote;
 
+    private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
+    private static final String REDIRECT_URI = "com.example.musicplayer://callback";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setFullScreen();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
-
         initViews();
         getIntentMethod();
+        setupListeners();
 
-        // Retrieve the access token from SharedPreferences
+        // Retrieve the access token from SharedPreferences or initiate authorization
         String accessToken = getAccessToken();
         if (accessToken != null) {
-            connectSpotifyRemote();
+            connectSpotifyRemote(accessToken);
         } else {
-            // If no token, redirect to MainActivity for re-authentication
-            Toast.makeText(this, "Please authenticate with Spotify.", Toast.LENGTH_SHORT).show();
-            startActivity(new Intent(this, MainActivity.class));
-            finish();
+            startSpotifyAuth();
+        }
+    }
+
+    protected void startSpotifyAuth() {
+        AuthorizationRequest.Builder builder = new AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI);
+        builder.setScopes(new String[]{"streaming", "user-library-read", "user-modify-playback-state"}); // Add scopes as needed
+        AuthorizationRequest request = builder.build();
+        AuthorizationClient.openLoginActivity(this, REQUEST_CODE, request);
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE) {
+            AuthorizationResponse response = AuthorizationClient.getResponse(resultCode, data);
+            switch (response.getType()) {
+                case TOKEN:
+                    String accessToken = response.getAccessToken();
+                    Log.d("MainActivity", "Access Token received: " + accessToken);
+                    connectSpotifyRemote(accessToken);
+                    break;
+                case ERROR:
+                    Log.e("MainActivity", "Authorization error: " + response.getError());
+                    Toast.makeText(this, "Authorization failed: " + response.getError(), Toast.LENGTH_LONG).show();
+                    break;
+                default:
+                    Log.e("MainActivity", "Unknown response type: " + response.getType());
+                    Toast.makeText(this, "Authorization response type: " + response.getType(), Toast.LENGTH_LONG).show();
+                    break;
+            }
         }
     }
 
@@ -89,33 +129,49 @@ public class PlayerActivity extends AppCompatActivity
         return sharedPreferences.getString("access_token", null);
     }
 
-    private void connectSpotifyRemote() {
-        ConnectionParams connectionParams = new ConnectionParams.Builder(CLIENT_ID)
-                .setRedirectUri(REDIRECT_URI)
-                .showAuthView(true)
-                .build();
+    private void connectSpotifyRemote(String accessToken) {
+        Log.d("PlayerActivity", "Attempting to connect with Access Token: " + accessToken);
 
-        SpotifyAppRemote.connect(this, connectionParams, new Connector.ConnectionListener() {
-            @Override
-            public void onConnected(SpotifyAppRemote spotifyAppRemote) {
-                PlayerActivity.this.spotifyAppRemote = spotifyAppRemote;
-                Log.d("Spotify", "Connected successfully");
-                testPlayRandomSong(); // Start playing a random song
-            }
+        if (accessToken != null) {
+            ConnectionParams connectionParams = new ConnectionParams.Builder(CLIENT_ID)
+                    .setRedirectUri(REDIRECT_URI)
+                    .showAuthView(true)
+                    .build();
 
-            @Override
-            public void onFailure(Throwable throwable) {
-                Log.e("Spotify", "Connection failed: " + throwable.getMessage());
-                if (throwable.getMessage().contains("AUTHENTICATION_FAILED")) {
-                    Toast.makeText(PlayerActivity.this, "Authentication failed. Please log in again.", Toast.LENGTH_SHORT).show();
-                    Intent intent = new Intent(PlayerActivity.this, MainActivity.class);
-                    startActivity(intent);
-                    finish();
-                } else {
-                    Toast.makeText(PlayerActivity.this, "Failed to connect to Spotify. Check your connection.", Toast.LENGTH_SHORT).show();
+            SpotifyAppRemote.connect(this, connectionParams, new Connector.ConnectionListener() {
+                @Override
+                public void onConnected(SpotifyAppRemote spotifyAppRemote) {
+                    PlayerActivity.this.spotifyAppRemote = spotifyAppRemote;
+                    Log.d("Spotify", "Connected successfully");
+                    SpotifyTrack selectedTrack = listSongs.get(position);
+                    String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
+
+                    // Example: Check if player is ready and handle post-connection setup
+                    spotifyAppRemote.getPlayerApi().play(spotifyUri).setResultCallback(empty -> {
+                        Log.d("Spotify", "Track started: " + spotifyUri);
+                        handler.post(updateSeekBarRunnable); // Start updating seekbar
+                    }).setErrorCallback(throwable -> Log.e("Spotify", "Error starting playback: " + throwable.getMessage()));
                 }
-            }
-        });
+
+                @Override
+                public void onFailure(Throwable throwable) {
+                    Log.e("Spotify", "Connection failed: " + throwable.getMessage());
+                    if (throwable.getMessage().contains("AUTHENTICATION_FAILED") ||
+                            throwable.getMessage().contains("Explicit user authorization is required")) {
+                        Log.d("Spotify", "Authentication required. Starting auth flow.");
+                        startSpotifyAuth(); // Initiates the Spotify authorization flow
+                    } else {
+                        Log.d("Spotify", "Generic failure. Showing user feedback.");
+                        Toast.makeText(PlayerActivity.this, "Failed to connect to Spotify: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+        } else {
+            Log.d("PlayerActivity", "Access Token is null. Redirecting to MainActivity for authentication.");
+            Intent intent = new Intent(PlayerActivity.this, MainActivity.class);
+            startActivity(intent);
+            finish();
+        }
     }
 
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -129,7 +185,8 @@ public class PlayerActivity extends AppCompatActivity
 
     private void setFullScreen() {
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
     }
 
     @Override
@@ -137,11 +194,28 @@ public class PlayerActivity extends AppCompatActivity
         super.onResume();
         Intent intent = new Intent(this, MusicService.class);
         bindService(intent, this, BIND_AUTO_CREATE);
+
+        if (spotifyAppRemote != null) {
+            handler.post(updateSeekBarRunnable); // Start updating seekbar
+            musicService.subscribeToPlayerStateUpdates(playerState -> {
+                if (playerState != null && playerState.track != null) {
+                    int duration = (int) (playerState.track.duration / 1000); // Duration in seconds
+                    seekBar.setMax(duration);
+                    seekBar.setProgress((int) (playerState.playbackPosition / 1000)); // Current position in seconds
+                    duration_played.setText(formattedTime((int) (playerState.playbackPosition / 1000)));
+                    duration_total.setText(formattedTime(duration));
+                } else {
+                    Log.w("PlayerActivity", "PlayerState or Track is null during onResume.");
+                }
+            });
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        handler.removeCallbacks(updateSeekBarRunnable);
+
         if (spotifyAppRemote != null) {
             spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
                 SharedPreferences.Editor editor = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE).edit();
@@ -150,6 +224,11 @@ public class PlayerActivity extends AppCompatActivity
                 editor.apply();
             });
         }
+
+        if (musicService != null) {
+            musicService.unsubscribeFromPlayerStateUpdates(); // Unsubscribe from updates
+        }
+
         unbindService(this);
     }
 
@@ -189,7 +268,7 @@ public class PlayerActivity extends AppCompatActivity
         @Override
         public void run() {
             if (spotifyAppRemote != null) {
-                spotifyAppRemote.getPlayerApi().subscribeToPlayerState().setEventCallback(playerState -> {
+                spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
                     int currentPosition = (int) (playerState.playbackPosition / 1000); // in seconds
                     seekBar.setProgress(currentPosition);
                     duration_played.setText(formattedTime(currentPosition));
@@ -206,10 +285,12 @@ public class PlayerActivity extends AppCompatActivity
                     playPauseBtn.setImageResource(R.drawable.ic_pause);
                     musicService.showNotification(R.drawable.ic_pause);
                     spotifyAppRemote.getPlayerApi().resume();
+                    handler.post(updateSeekBarRunnable);
                 } else {
                     playPauseBtn.setImageResource(R.drawable.ic_play);
                     musicService.showNotification(R.drawable.ic_play);
                     spotifyAppRemote.getPlayerApi().pause();
+                    handler.removeCallbacks(updateSeekBarRunnable);
                 }
             });
         }
@@ -223,11 +304,17 @@ public class PlayerActivity extends AppCompatActivity
                 position = isNext ? (position + 1) % listSongs.size() : (position - 1 < 0 ? listSongs.size() - 1 : position - 1);
             }
             SpotifyTrack selectedTrack = listSongs.get(position);
-            String spotifyUri = selectedTrack.getTrackId();
+            String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
 
             spotifyAppRemote.getPlayerApi().play(spotifyUri).setResultCallback(empty -> {
+                handler.post(updateSeekBarRunnable); // Start updating seekbar
                 song_name.setText(selectedTrack.getTrackName());
                 artist_name.setText(selectedTrack.getArtistName());
+                Glide.with(this)
+                        .load(selectedTrack.getAlbumImageUrl())
+                        .placeholder(R.drawable.gradient_bg) // Set gradient as a placeholder
+                        .into(cover_art);
+                Glide.with(this).load(selectedTrack.getAlbumImageUrl()).into(cover_art);
                 playPauseBtn.setImageResource(R.drawable.ic_pause);
                 musicService.showNotification(R.drawable.ic_pause);
 
@@ -260,35 +347,11 @@ public class PlayerActivity extends AppCompatActivity
         return seconds.length() == 1 ? minutes + ":0" + seconds : minutes + ":" + seconds;
     }
 
-    private void testPlayRandomSong() {
-        if (spotifyAppRemote != null && listSongs != null && !listSongs.isEmpty()) {
-            // Pick a random track from the list
-            int randomIndex = new Random().nextInt(listSongs.size());
-            SpotifyTrack randomTrack = listSongs.get(1);
-            String spotifyUri = randomTrack.getTrackId();
-
-            // Log to check which song is playing
-            Log.d("TestPlay", "Attempting to play: " + randomTrack.getTrackName());
-
-            // Play the random track
-            spotifyAppRemote.getPlayerApi().play(spotifyUri).setResultCallback(empty -> {
-                // Update UI with the current track details
-                updateUIWithCurrentTrack(randomTrack);
-                playPauseBtn.setImageResource(R.drawable.ic_pause);
-                Log.d("TestPlay", "Playing: " + randomTrack.getTrackName());
-            }).setErrorCallback(error -> {
-                Log.e("TestPlay", "Error playing track: " + error.getMessage());
-                Toast.makeText(this, "Error playing track: " + error.getMessage(), Toast.LENGTH_SHORT).show();
-            });
-        } else {
-            Toast.makeText(this, "Spotify Remote is not connected or song list is empty.", Toast.LENGTH_SHORT).show();
-            Log.e("TestPlay", "Spotify Remote not connected or listSongs is empty.");
-        }
-    }
     private void getIntentMethod() {
         Intent intent = getIntent();
         position = intent.getIntExtra("position", -1);
         listSongs = intent.getParcelableArrayListExtra("trackList");
+
 
         if (listSongs != null && !listSongs.isEmpty() && position >= 0 && position < listSongs.size()) {
             playPauseBtn.setImageResource(R.drawable.ic_pause);
@@ -325,11 +388,79 @@ public class PlayerActivity extends AppCompatActivity
         duration_total.setText(formattedTime(durationTotal));
 
         if (albumImageUrl != null) {
-            Glide.with(this).load(albumImageUrl).into(cover_art);
+            Glide.with(this)
+                    .asBitmap()
+                    .load(albumImageUrl)
+                    .placeholder(R.drawable.gradient_bg) // Placeholder for loading
+                    .into(new BitmapImageViewTarget(cover_art) {
+                        @Override
+                        protected void setResource(Bitmap resource) {
+                            super.setResource(resource);
+                            if (resource != null && !resource.isRecycled()) {
+                                ImageAnimation(PlayerActivity.this, cover_art, resource);
+
+                                Palette.from(resource).generate(palette -> {
+                                    if (palette != null) {
+                                        Palette.Swatch swatch = palette.getDominantSwatch();
+                                        if (swatch != null) {
+                                            updateUIWithSwatch(swatch);
+                                        } else {
+                                            applyDefaultStyles();
+                                        }
+                                    }
+                                });
+                            } else {
+                                Log.e("PlayerActivity", "Bitmap is invalid or null");
+                                applyDefaultStyles(); // Fallback in case of an invalid Bitmap
+                            }
+                        }
+                    });
         } else {
             cover_art.setImageResource(R.drawable.gradient_bg);
+            applyDefaultStyles();
         }
     }
+
+    private void updateUIWithSwatch(Palette.Swatch swatch) {
+        ImageView gradient = findViewById(R.id.imageViewGradient);
+        RelativeLayout mContainer = findViewById(R.id.mContainer);
+
+        GradientDrawable gradientDrawable = new GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{swatch.getRgb(), 0x00000000}
+        );
+        gradient.setBackground(gradientDrawable);
+
+        GradientDrawable gradientDrawableBg = new GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{swatch.getRgb(), swatch.getRgb()}
+        );
+        mContainer.setBackground(gradientDrawableBg);
+
+        song_name.setTextColor(swatch.getTitleTextColor());
+        artist_name.setTextColor(swatch.getBodyTextColor());
+    }
+
+    private void applyDefaultStyles() {
+        ImageView gradient = findViewById(R.id.imageViewGradient);
+        RelativeLayout mContainer = findViewById(R.id.mContainer);
+
+        GradientDrawable gradientDrawable = new GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{0xff000000, 0x00000000}
+        );
+        gradient.setBackground(gradientDrawable);
+
+        GradientDrawable gradientDrawableBg = new GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{0xff000000, 0xff000000}
+        );
+        mContainer.setBackground(gradientDrawableBg);
+
+        song_name.setTextColor(Color.WHITE);
+        artist_name.setTextColor(Color.DKGRAY);
+    }
+
 
     public void ImageAnimation(Context context, ImageView imageView, Bitmap bitmap) {
         Animation animOut = AnimationUtils.loadAnimation(context, android.R.anim.fade_out);
@@ -350,19 +481,9 @@ public class PlayerActivity extends AppCompatActivity
         musicService = myBinder.getService();
         musicService.setCallBack(this);
 
-        // Get saved playback position and song data
-        SharedPreferences sharedPreferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
-        int savedPosition = sharedPreferences.getInt("savedPosition", -1);
-        int savedSong = sharedPreferences.getInt("currentSong", -1);
-
         // Ensure we have a valid list of songs and position
         if (listSongs != null && !listSongs.isEmpty() && position >= 0 && position < listSongs.size()) {
             SpotifyTrack currentTrack = listSongs.get(position);
-
-            // Set saved playback position if available and matches current song
-            if (savedPosition != -1 && savedSong == position) {
-                musicService.seekTo(savedPosition); // Use musicService to control playback
-            }
 
             // Show notification and setup UI updates
             musicService.showNotification(R.drawable.ic_pause);

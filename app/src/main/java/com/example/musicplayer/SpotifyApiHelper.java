@@ -1,6 +1,9 @@
 package com.example.musicplayer;
 
+import static android.content.Context.MODE_PRIVATE;
+
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -26,7 +29,7 @@ public class SpotifyApiHelper {
 
     public static void fetchAlbumTracks(Context context, String albumId, SpotifyAlbumCallback callback) {
 
-        String accessToken = MainActivity.getAccessToken(context);
+        String accessToken = getAccessToken(context);
         OkHttpClient client = new OkHttpClient();
 
         Request request = new Request.Builder()
@@ -52,6 +55,11 @@ public class SpotifyApiHelper {
                 }
             }
         });
+    }
+
+    private static String getAccessToken(Context context) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        return sharedPreferences.getString("access_token", null);
     }
 
     private static ArrayList<SpotifyTrack> parseTracks(String jsonData) {

@@ -57,14 +57,18 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
         albumArt = view.findViewById(R.id.bottom_album_art);
         nextBtn = view.findViewById(R.id.skip_next_button);
         playPauseBtn  = view.findViewById(R.id.play_miniPlayer);
+        playPauseBtn.setImageResource(R.drawable.ic_pause);
         nextBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if(musicService != null){
+                    updateUI();
                     musicService.nextBtnClicked();
                     if(getActivity() != null) {
                         SharedPreferences.Editor editor = getActivity().getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE)
                                 .edit();
+                        editor.putString(MUSIC_FILE, musicFiles
+                                .get(position).getAlbumImageUrl());
                         editor.putString(ARTIST_NAME, musicFiles
                                 .get(position).getArtistName());
                         editor.putString(SONG_NAME, musicFiles
@@ -127,26 +131,38 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
                 displayAlbumArt();
                 songName.setText(SONG_TO_FRAG);
                 artist.setText(ARTIST_TO_FRAG);
-                Intent intent = new Intent(getContext(), MusicService.class);
-                if(getContext() != null){
-                    getContext().bindService(intent, this, Context.BIND_AUTO_CREATE);
-                }
             }
+        }
+        Intent intent = new Intent(getContext(), MusicService.class);
+        if(getContext() != null){
+            getContext().bindService(intent, this, Context.BIND_AUTO_CREATE);
         }
     }
 
     private void displayAlbumArt() {
         if (musicService != null && musicFiles != null && position >= 0 && position < musicFiles.size()) {
             String albumImageUrl = musicFiles.get(position).getAlbumImageUrl();
-
-            // Load album art directly from Spotify URL
             if (albumImageUrl != null) {
-                Glide.with(this).load(albumImageUrl).into(albumArt);  // Ensure `albumArt` is your ImageView for album art
+                Glide.with(this)
+                        .load(albumImageUrl)
+                        .placeholder(R.drawable.gradient_bg)
+                        .into(albumArt);
             } else {
-                albumArt.setImageResource(R.drawable.gradient_bg); // Set a default image if no album art URL is available
+                albumArt.setImageResource(R.drawable.gradient_bg);
             }
         } else {
-            Log.e("NowPlayingFragment", "Invalid song position or empty list in displayAlbumArt.");
+            Log.e("NowPlayingFragment", "Invalid position or musicFiles is null in displayAlbumArt.");
+        }
+    }
+
+    private void updateUI() {
+        if (musicService != null && musicFiles != null && position >= 0 && position < musicFiles.size()) {
+            SpotifyTrack currentTrack = musicFiles.get(position);
+            songName.setText(currentTrack.getTrackName());
+            artist.setText(currentTrack.getArtistName());
+            displayAlbumArt();
+        } else {
+            Log.e("NowPlayingFragment", "Invalid position or musicFiles is null.");
         }
     }
 
@@ -163,6 +179,7 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
     public void onServiceConnected(ComponentName componentName, IBinder service) {
         MusicService.MyBinder binder = (MusicService.MyBinder) service;
         musicService = binder.getService();
+        updateUI();
     }
 
     @Override

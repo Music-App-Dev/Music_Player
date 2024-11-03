@@ -92,10 +92,27 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permission();
         }
+
+        // Load sorting preference
+        SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
+        String sortPreference = preferences.getString("sorting", "sortByName");
+        // Apply sorting based on preference
+        switch (sortPreference) {
+            case "sortByName":
+                sortMusicFilesBy("name");
+                break;
+            case "sortByAlbum":
+                sortMusicFilesBy("date");
+                break;
+            case "sortByDuration":
+                sortMusicFilesBy("duration");
+                break;
+        }
+
         startSpotifyAuth();
         initViewPager();
 
-        String accessToken = getAccessToken(this);
+        String accessToken = getAccessToken();
         if (accessToken != null) {
             loadSpotifyData();  // Fetch albums and tracks immediately if already authenticated
         }
@@ -133,9 +150,9 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         editor.apply();
     }
 
-    public static String getAccessToken(Context context) {
-        SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
-        return sharedPreferences.getString("access_token", null); // Returns null if the token isn't stored
+    public String getAccessToken() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        return sharedPreferences.getString("access_token", null);
     }
 
     private void getUserSavedAlbums() {
@@ -238,6 +255,16 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         musicFiles.addAll(trackList);
         Log.d("MainActivity", "Displaying " + musicFiles.size() + " tracks.");
 
+
+//       for (int i = 0; i < musicFiles.size(); i++) {
+//            SpotifyTrack spotifyTrack = musicFiles.get(i);
+//            Log.d("TrackInfo", "Album " + (i + 1) + ":");
+//            Log.d("TrackInfo", "  Name: " + spotifyTrack.getAlbumName());
+//            Log.d("TrackInfo", "  Artist: " + spotifyTrack.getArtistName());
+//            Log.d("TrackInfo", "  Image URL: " + spotifyTrack.getAlbumImageUrl());
+//            Log.d("TrackInfo", "  Track ID: " + spotifyTrack.getTrackId());
+//       }
+
         SongsFragment songsFragment = (SongsFragment) viewPagerAdapter.getFragment(0);
         if (songsFragment != null) {
             songsFragment.updateMusicList(trackList);
@@ -252,7 +279,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
 
     protected void startSpotifyAuth() {
         AuthorizationRequest.Builder builder = new AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI);
-        builder.setScopes(new String[]{"streaming", "user-library-read"});
+        builder.setScopes(new String[]{"streaming", "user-library-read", "user-modify-playback-state"});
         AuthorizationRequest request = builder.build();
         AuthorizationClient.openLoginActivity(this, REQUEST_CODE, request);
     }
@@ -460,7 +487,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             editor.apply();
             this.recreate();
         } else if (item.getItemId() == R.id.by_date) {
-            editor.putString("sorting", "sortByDate");
+            editor.putString("sorting", "sortByAlbum");
             editor.apply();
             this.recreate();
         } else if (item.getItemId() == R.id.by_duration) {
@@ -469,6 +496,22 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             this.recreate();
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    public void sortMusicFilesBy(String criteria) {
+        if (musicFiles == null || musicFiles.isEmpty()) return;
+
+        switch (criteria) {
+            case "name":
+                Collections.sort(musicFiles, (a, b) -> a.getTrackName().compareToIgnoreCase(b.getTrackName()));
+                break;
+            case "album":
+                Collections.sort(musicFiles, (a, b) -> a.getAlbumName().compareTo(b.getAlbumName())); // Assuming getDateAdded() returns a comparable date
+                break;
+            case "duration":
+                Collections.sort(musicFiles, (a, b) -> a.getDuration().compareTo(b.getDuration()));
+                break;
+        }
     }
 
     @Override

@@ -4,6 +4,7 @@ import static com.example.musicplayer.ApplicationClass.ACTION_NEXT;
 import static com.example.musicplayer.ApplicationClass.ACTION_PLAY;
 import static com.example.musicplayer.ApplicationClass.ACTION_PREVIOUS;
 import static com.example.musicplayer.ApplicationClass.CHANNEL_ID_2;
+import static com.example.musicplayer.MainActivity.REQUEST_CODE;
 import static com.example.musicplayer.MainActivity.repeatBoolean;
 import static com.example.musicplayer.MainActivity.shuffleBoolean;
 import static com.example.musicplayer.PlayerActivity.listSongs;
@@ -21,20 +22,39 @@ import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.support.v4.media.session.MediaSessionCompat;
+import android.telecom.Call;
 import android.util.Log;
+import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.util.Consumer;
 
+import com.spotify.android.appremote.api.ConnectionParams;
+import com.spotify.android.appremote.api.Connector;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
+import com.spotify.protocol.client.Subscription;
 import com.spotify.protocol.types.PlayerState;
+import com.spotify.sdk.android.auth.AuthorizationClient;
+import com.spotify.sdk.android.auth.AuthorizationRequest;
+import com.spotify.sdk.android.auth.AuthorizationResponse;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 
 public class MusicService extends Service {
@@ -44,24 +64,27 @@ public class MusicService extends Service {
     private final IBinder mBinder = new MyBinder();
     public static ArrayList<SpotifyTrack> musicFiles = new ArrayList<>();
     public static int position = -1;
-    private MediaSessionCompat mediaSessionCompat;
     private ActionPlaying actionPlaying;
 
     public static final String MUSIC_FILE_LAST_PLAYED = "LAST_PLAYED";
     public static final String MUSIC_FILE = "STORED_MUSIC";
     public static final String ARTIST_NAME = "ARTIST_NAME";
     public static final String SONG_NAME = "SONG_NAME";
+    private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
+    private static final String REDIRECT_URI = "com.example.musicplayer://callback";
+
+    private Subscription<PlayerState> playerStateSubscription;
 
     public class MyBinder extends Binder {
         MusicService getService() {
             return MusicService.this;
         }
+
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        mediaSessionCompat = new MediaSessionCompat(getBaseContext(), "PlayerActivity");
     }
 
     @Nullable
@@ -72,6 +95,10 @@ public class MusicService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (spotifyAppRemote == null || !spotifyAppRemote.isConnected()) {
+            connectToSpotify();
+        }
+
         if (intent != null) {
             int myPosition = intent.getIntExtra("servicePosition", -1);
             String actionName = intent.getStringExtra("ActionName");
@@ -99,23 +126,123 @@ public class MusicService extends Service {
         return START_STICKY;
     }
 
+    private void connectToSpotify() {
+        ConnectionParams connectionParams = new ConnectionParams.Builder(CLIENT_ID)
+                .setRedirectUri(REDIRECT_URI)
+                .showAuthView(true)
+                .build();
+
+        SpotifyAppRemote.connect(getApplicationContext(), connectionParams,
+                new Connector.ConnectionListener() {
+                    @Override
+                    public void onConnected(SpotifyAppRemote appRemote) {
+                        spotifyAppRemote = appRemote;
+                        Log.d(TAG, "Connected to Spotify");
+                    }
+
+                    @Override
+                    public void onFailure(Throwable throwable) {
+                        Log.e(TAG, "Failed to connect to Spotify", throwable);
+                    }
+                });
+    }
+
+
     // Additional methods
     public void seekTo(int positionInMillis) {
         if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().seekTo(positionInMillis)
-                    .setResultCallback(empty -> Log.d(TAG, "Seeked to position: " + positionInMillis))
-                    .setErrorCallback(error -> Log.e(TAG, "Error seeking to position", error));
+            spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
+                if (playerState != null && playerState.track != null) {
+                    if (!playerState.track.isPodcast && !playerState.track.isEpisode) {
+                        spotifyAppRemote.getPlayerApi().seekTo(positionInMillis)
+                                .setResultCallback(empty -> Log.d(TAG, "Seeked to position: " + positionInMillis))
+                                .setErrorCallback(error -> {
+                                    Log.e(TAG, "Error seeking to position", error);
+                                    fallbackSeekTo(positionInMillis);
+                                });
+                    } else {
+                        Log.w(TAG, "Cannot seek in this track type.");
+                    }
+                } else {
+                    Log.w(TAG, "PlayerState or Track is null. Retrying seek...");
+                    retrySeek(positionInMillis);
+                }
+            }).setErrorCallback(error -> Log.e(TAG, "Error fetching player state", error));
+        } else {
+            Log.w(TAG, "SpotifyAppRemote is null. Falling back to Web API.");
+            fallbackSeekTo(positionInMillis);
         }
     }
 
+
+    private void fallbackSeekTo(int positionInMillis) {
+        String accessToken = getAccessToken(); // Retrieve your access token
+        if (accessToken == null) {
+            Log.e(TAG, "Access token is null, cannot seek using Web API.");
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/me/player/seek?position_ms=" + positionInMillis)
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .put(RequestBody.create("", null)) // PUT request needs an empty body
+                .build();
+
+        client.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onResponse(@NonNull okhttp3.Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "Seeked to position via Web API: " + positionInMillis);
+                } else {
+                    Log.e(TAG, "Failed to seek via Web API: " + response.message());
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
+                Log.e(TAG, "Error seeking via Web API", e);
+
+            }
+
+        });
+    }
+
+
+    private void retrySeek(int positionInMillis) {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> seekTo(positionInMillis), 1000); // Retry after 1 second
+    }
+
+    private String getAccessToken() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        return sharedPreferences.getString("access_token", null);
+    }
+
     public void subscribeToPlayerStateUpdates(Consumer<PlayerState> callback) {
-        if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().subscribeToPlayerState()
-                    .setEventCallback(callback::accept)
+        if (spotifyAppRemote != null && playerStateSubscription == null) {
+            playerStateSubscription = (Subscription<PlayerState>) spotifyAppRemote.getPlayerApi().subscribeToPlayerState()
+                    .setEventCallback(playerState -> {
+                        if (playerState != null && playerState.track != null) {
+                            Log.d(TAG, "Track: " + playerState.track.name +
+                                    ", Artist: " + playerState.track.artist.name +
+                                    ", Duration: " + playerState.track.duration +
+                                    ", IsPodcast: " + playerState.track.isPodcast +
+                                    ", IsEpisode: " + playerState.track.isEpisode);
+                        } else {
+                            Log.w(TAG, "PlayerState or Track is null.");
+                        }
+                        callback.accept(playerState);
+                    })
                     .setErrorCallback(error -> Log.e(TAG, "Error subscribing to player state", error));
         }
     }
 
+    public void unsubscribeFromPlayerStateUpdates() {
+        if (playerStateSubscription != null) {
+            playerStateSubscription.cancel();
+            playerStateSubscription = null;
+        }
+    }
     // Define a Callback interface to handle asynchronous results
     interface Callback<T> {
         void onResult(T result);
@@ -127,7 +254,7 @@ public class MusicService extends Service {
             position = startPosition;
 
             SpotifyTrack selectedTrack = musicFiles.get(position);
-            String spotifyUri = selectedTrack.getTrackId();
+            String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
 
             if (spotifyAppRemote != null) {
                 spotifyAppRemote.getPlayerApi().play(spotifyUri)
@@ -208,14 +335,16 @@ public class MusicService extends Service {
                 .setContentTitle(currentTrack.getTrackName())
                 .setContentText(currentTrack.getArtistName())
                 .addAction(R.drawable.ic_skip_previous, "Previous", prevPending)
-                .addAction(playPauseBtn, "Pause", pausePending)
+                .addAction(playPauseBtn, "Pause/Play", pausePending)
                 .addAction(R.drawable.ic_skip_next, "Next", nextPending)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOnlyAlertOnce(true)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle())
+                .setContentIntent(contentIntent)
                 .build();
 
-        startForeground(5, notification);
+        startForeground(1, notification);
     }
 
     void nextBtnClicked() {

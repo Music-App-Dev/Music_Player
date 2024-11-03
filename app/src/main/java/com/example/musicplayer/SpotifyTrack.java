@@ -13,6 +13,7 @@ public class SpotifyTrack implements Parcelable {
     private String albumImageUrl;
     private String trackId;
 
+
     // Constructor
     public SpotifyTrack(String trackName, String artistName, String albumName, String duration, String albumImageUrl, String trackId) {
         this.trackName = trackName;
