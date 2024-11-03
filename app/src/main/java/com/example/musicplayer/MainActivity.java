@@ -38,6 +38,7 @@ import com.spotify.android.appremote.api.SpotifyAppRemote;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
@@ -93,21 +94,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             permission();
         }
 
-        // Load sorting preference
-        SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
-        String sortPreference = preferences.getString("sorting", "sortByName");
-        // Apply sorting based on preference
-        switch (sortPreference) {
-            case "sortByName":
-                sortMusicFilesBy("name");
-                break;
-            case "sortByAlbum":
-                sortMusicFilesBy("date");
-                break;
-            case "sortByDuration":
-                sortMusicFilesBy("duration");
-                break;
-        }
 
         startSpotifyAuth();
         initViewPager();
@@ -255,16 +241,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         musicFiles.addAll(trackList);
         Log.d("MainActivity", "Displaying " + musicFiles.size() + " tracks.");
 
-
-//       for (int i = 0; i < musicFiles.size(); i++) {
-//            SpotifyTrack spotifyTrack = musicFiles.get(i);
-//            Log.d("TrackInfo", "Album " + (i + 1) + ":");
-//            Log.d("TrackInfo", "  Name: " + spotifyTrack.getAlbumName());
-//            Log.d("TrackInfo", "  Artist: " + spotifyTrack.getArtistName());
-//            Log.d("TrackInfo", "  Image URL: " + spotifyTrack.getAlbumImageUrl());
-//            Log.d("TrackInfo", "  Track ID: " + spotifyTrack.getTrackId());
-//       }
-
         SongsFragment songsFragment = (SongsFragment) viewPagerAdapter.getFragment(0);
         if (songsFragment != null) {
             songsFragment.updateMusicList(trackList);
@@ -397,9 +373,12 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
         String accessToken = sharedPreferences.getString("access_token", null);
 
+        SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
+        String sortOrder = preferences.getString("sorting", "sortByName");
+
         if (accessToken == null) {
             Log.e("MainActivity", "Access token is missing or invalid. Re-authentication may be required.");
-            return; // Exit if there's no valid access token
+            return;
         }
 
         OkHttpClient client = new OkHttpClient();
@@ -418,14 +397,11 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (response.isSuccessful()) {
                     String responseData = response.body().string();
-                    Log.d("MainActivity", "Spotify API Response: " + responseData);  // Log the full response
-
                     try {
                         JSONObject jsonObject = new JSONObject(responseData);
                         JSONArray items = jsonObject.getJSONArray("items");
 
-                        // Initialize musicFiles and add tracks
-                        ArrayList<SpotifyTrack> muFiles = new ArrayList<>();
+                        ArrayList<SpotifyTrack> fetchedSongs = new ArrayList<>();
                         for (int i = 0; i < items.length(); i++) {
                             JSONObject trackObject = items.getJSONObject(i).getJSONObject("track");
 
@@ -436,11 +412,13 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                             String trackId = trackObject.getString("id");
                             String duration = trackObject.getString("duration_ms");
 
-                            muFiles.add(new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId));
+                            fetchedSongs.add(new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId));
                         }
 
-                        Log.d("MainActivity", "Fetched " + muFiles.size() + " tracks from Spotify.");  // Log the number of fetched tracks
-                        runOnUiThread(() -> displayTracks(muFiles));
+                        // Sort the fetched songs based on preference
+                        sortSpotifyTracks(fetchedSongs, sortOrder);
+
+                        runOnUiThread(() -> displayTracks(fetchedSongs));
 
                     } catch (JSONException e) {
                         Log.e("MainActivity", "Failed to parse track JSON", e);
@@ -450,6 +428,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                 }
             }
         });
+
+
     }
 
     @Override
@@ -470,46 +450,54 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     public boolean onQueryTextChange(String newText) {
         String userInput = newText.toLowerCase();
         ArrayList<SpotifyTrack> myFiles = new ArrayList<>();
+
         for(SpotifyTrack song : musicFiles){
             if (song.getTrackName().toLowerCase().contains(userInput)){
                 myFiles.add(song);
             }
         }
-        SongsFragment.musicAdapter.updateList(myFiles);
+        if (newText.isEmpty()) {
+            SongsFragment.musicAdapter.updateList(musicFiles);  // Reset to full list if search is cleared
+        } else {
+            SongsFragment.musicAdapter.updateList(myFiles); // Show filtered list
+        }
+        SongsFragment.musicAdapter.notifyDataSetChanged();
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         SharedPreferences.Editor editor = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE).edit();
+        String sortOrder = null;
+
         if (item.getItemId() == R.id.by_name) {
-            editor.putString("sorting", "sortByName");
-            editor.apply();
-            this.recreate();
+            sortOrder = "sortByName";
         } else if (item.getItemId() == R.id.by_date) {
-            editor.putString("sorting", "sortByAlbum");
-            editor.apply();
-            this.recreate();
+            sortOrder = "sortByDate";
         } else if (item.getItemId() == R.id.by_duration) {
-            editor.putString("sorting", "sortByDuration");
-            editor.apply();
-            this.recreate();
+            sortOrder = "sortByDuration";
         }
+
+        if (sortOrder != null) {
+            editor.putString("sorting", sortOrder);
+            editor.apply();
+
+            loadSpotifyTracks();  // Reload the tracks with the new sort order
+        }
+
         return super.onOptionsItemSelected(item);
     }
 
-    public void sortMusicFilesBy(String criteria) {
-        if (musicFiles == null || musicFiles.isEmpty()) return;
-
-        switch (criteria) {
-            case "name":
-                Collections.sort(musicFiles, (a, b) -> a.getTrackName().compareToIgnoreCase(b.getTrackName()));
+    private void sortSpotifyTracks(ArrayList<SpotifyTrack> tracks, String sortOrder) {
+        switch (sortOrder) {
+            case "sortByName":
+                tracks.sort((t1, t2) -> t1.getTrackName().compareToIgnoreCase(t2.getTrackName()));
                 break;
-            case "album":
-                Collections.sort(musicFiles, (a, b) -> a.getAlbumName().compareTo(b.getAlbumName())); // Assuming getDateAdded() returns a comparable date
+            case "sortByDuration":
+                tracks.sort((t1, t2) -> Integer.compare(Integer.parseInt(t1.getDuration()), Integer.parseInt(t2.getDuration())));
                 break;
-            case "duration":
-                Collections.sort(musicFiles, (a, b) -> a.getDuration().compareTo(b.getDuration()));
+            default:
+                Log.w("SortDebug", "Unknown sort order: " + sortOrder);
                 break;
         }
     }

@@ -33,6 +33,8 @@ public class AlbumDetailsAdapter extends RecyclerView.Adapter<AlbumDetailsAdapte
         return new MyHolder(view);
     }
 
+
+
     @Override
     public void onBindViewHolder(@NonNull MyHolder holder, @SuppressLint("RecyclerView") final int position) {
         SpotifyTrack album = albumFiles.get(position);

@@ -43,6 +43,7 @@ public class SongsFragment extends Fragment {
         if (recyclerView != null && musicAdapter != null) {
             musicFiles.clear();
             musicFiles.addAll(newTracks);
+            musicAdapter.updateList(newTracks);
             musicAdapter.notifyDataSetChanged();
             Log.d("SongsFragment", "Music list updated with " + newTracks.size() + " tracks.");
         } else {

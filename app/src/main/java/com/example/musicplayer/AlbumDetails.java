@@ -1,14 +1,17 @@
 package com.example.musicplayer;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.media.MediaMetadataRetriever;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 
@@ -57,31 +60,31 @@ public class AlbumDetails extends AppCompatActivity {
         SpotifyApiHelper.fetchAlbumTracks(this, albumId, new SpotifyApiHelper.SpotifyAlbumCallback() {
             @Override
             public void onSuccess(ArrayList<SpotifyTrack> tracks, String albumArtUrl) {
-                albumSongs.clear();
-                albumSongs.addAll(tracks);
-                albumDetailsAdapter.notifyDataSetChanged();  // Notify adapter of data change
+                Log.d("AlbumDetails", "Tracks fetched: " + tracks.size());
+                Log.d("AlbumDetails", "Album art URL: " + albumArtUrl);
 
+                runOnUiThread(() -> {
+                    albumSongs.clear();
+                    albumSongs.addAll(tracks);
+                    albumDetailsAdapter.notifyDataSetChanged(); // Notify adapter of data change
 
-                // Load album art using Glide
-                if (albumArtUrl != null && !albumArtUrl.isEmpty()) {
-                    Glide.with(AlbumDetails.this)
-                            .load(albumArtUrl)
-                            .into(albumPhoto);
-                } else {
-                    Glide.with(AlbumDetails.this)
-                            .load(R.drawable.gradient_bg)  // Placeholder image if no album art available
-                            .into(albumPhoto);
-                }
+                    if (albumArtUrl != null && !albumArtUrl.isEmpty()) {
+                        Glide.with(AlbumDetails.this).load(albumArtUrl).into(albumPhoto);
+                    } else {
+                        Glide.with(AlbumDetails.this).load(R.drawable.gradient_bg).into(albumPhoto);
+                    }
 
-                setupRecyclerView();
+                    setupRecyclerView();
+                });
             }
 
             @Override
             public void onFailure(Exception e) {
-                // Handle error (e.g., display a toast or log error)
+                Log.e("AlbumDetails", "Failed to fetch album tracks", e);
             }
         });
     }
+
 
     private void setupRecyclerView() {
         albumDetailsAdapter = new AlbumDetailsAdapter(this, albumSongs);
