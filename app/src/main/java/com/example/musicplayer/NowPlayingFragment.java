@@ -7,6 +7,7 @@ import static com.example.musicplayer.MainActivity.PATH_TO_FRAG;
 import static com.example.musicplayer.MainActivity.SHOW_MINI_PLAYER;
 import static com.example.musicplayer.MainActivity.SONG_TO_FRAG;
 import static com.example.musicplayer.MusicService.musicFiles;
+import static com.example.musicplayer.MusicService.playMedia;
 import static com.example.musicplayer.MusicService.position;
 
 
@@ -77,6 +78,7 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
                 Log.d(TAG, "Next button clicked");
                 if (musicService != null) {
                     Log.d(TAG, "MusicService is not null, invoking nextBtnClicked");
+                    PlayerActivity.position = 1;
                     musicService.nextBtnClicked();
                     if (getActivity() != null) {
                         updateSharedPreferences();

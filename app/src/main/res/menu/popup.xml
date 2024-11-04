@@ -2,7 +2,11 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:title="Delete"
-        android:id="@+id/delete"
+        android:title="Add to Playlist"
+        android:id="@+id/add_playlist"
+        app:showAsAction="never"/>
+    <item
+        android:title="Create Playlist"
+        android:id="@+id/create_playlist"
         app:showAsAction="never"/>
 </menu>

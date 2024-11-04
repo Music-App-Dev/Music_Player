@@ -107,7 +107,7 @@ public class MusicService extends Service {
             String actionName = intent.getStringExtra("ActionName");
 
             if (myPosition != -1) {
-                playMedia(myPosition);
+                playMedia(myPosition, false);
             }
 
             if (actionName != null) {
@@ -116,10 +116,12 @@ public class MusicService extends Service {
                         playPauseButtonClicked();
                         break;
                     case "next":
-                        nextBtnClicked();
+                        if (musicFiles != null && !musicFiles.isEmpty()) {
+                            playMedia(PlayerActivity.position, true); // Ensure the media is played from the new position
+                        }
                         break;
                     case "previous":
-                        previousBtnClicked();
+                        playMedia(PlayerActivity.position, true);
                         break;
                 }
             }
@@ -151,35 +153,6 @@ public class MusicService extends Service {
     }
 
 
-    public void seekTo(int positionInMillis) {
-        if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
-                if (playerState != null && playerState.track != null) {
-                    if (!playerState.track.isPodcast && !playerState.track.isEpisode) {
-                        spotifyAppRemote.getPlayerApi().seekTo(positionInMillis)
-                                .setResultCallback(empty -> Log.d(TAG, "Seeked to position: " + positionInMillis))
-                                .setErrorCallback(error -> {
-                                    Log.e(TAG, "Error seeking to position", error);
-                                });
-                    } else {
-                        Log.w(TAG, "Cannot seek in this track type.");
-                    }
-                } else {
-                    Log.w(TAG, "PlayerState or Track is null. Retrying seek...");
-                }
-            }).setErrorCallback(error -> Log.e(TAG, "Error fetching player state", error));
-        } else {
-            Log.w(TAG, "SpotifyAppRemote is null. Falling back to Web API.");
-        }
-    }
-
-
-
-    private String getAccessToken() {
-        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
-        return sharedPreferences.getString("access_token", null);
-    }
-
     public void subscribeToPlayerStateUpdates(Consumer<PlayerState> callback) {
         if (spotifyAppRemote != null && playerStateSubscription == null) {
             playerStateSubscription = (Subscription<PlayerState>) spotifyAppRemote.getPlayerApi().subscribeToPlayerState()
@@ -210,19 +183,49 @@ public class MusicService extends Service {
         void onResult(T result);
     }
 
-    public void playMedia(int startPosition) {
+    public static void playMedia(int startPosition, boolean shouldPlay) {
         if (listSongs != null && startPosition >= 0 && startPosition < listSongs.size()) {
             musicFiles = listSongs;
             position = startPosition;
 
-            SpotifyTrack selectedTrack = musicFiles.get(position);
-            Log.d(TAG, "playMedia: Playing track at position: " + position + ", Track: " + selectedTrack.getTrackName());
+            SpotifyTrack selectedTrack = listSongs.get(PlayerActivity.position);
+            Log.d(TAG, "playMedia: Playing track at position: " + PlayerActivity.position + ", Track: " + selectedTrack.getTrackName());
+
+            if(shouldPlay){
+                String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
+                spotifyAppRemote.getPlayerApi().play(spotifyUri).setResultCallback(empty -> {
+                    Log.d(TAG, "playMedia: Playback started successfully");
+                }).setErrorCallback(error -> Log.e(TAG, "playMedia: Error playing track: " + error.getMessage()));
+            }
 
         } else {
             Log.e(TAG, "Invalid position or empty playlist.");
         }
-
     }
+
+
+    public void nextBtnClicked() {
+
+        if (repeatBoolean) {
+            Log.d("MusicService", "Repeat mode enabled, replaying the current track at position: " + position);
+            // Keep the current position for repeat mode
+        } else if (shuffleBoolean) {
+            // Shuffle mode logic
+            PlayerActivity.position = getRandom(listSongs.size() - 1);
+            Log.d("MusicService", "Shuffle mode enabled, playing random track at position: " + position);
+        } else {
+            PlayerActivity.position = (position + 1) % listSongs.size();
+            Log.d("MusicService", "Playing next/previous track at position: " + position);
+        }
+
+        Log.d("MusicService", "Next button clicked, current position: " + position);
+        playMedia(PlayerActivity.position, true);
+    }
+
+    private int getRandom(int i) {
+        return new Random().nextInt(i + 1);
+    }
+
 
     private void saveLastPlayed(String trackUri) {
         SharedPreferences.Editor editor = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
@@ -309,13 +312,6 @@ public class MusicService extends Service {
         }).start();
     }
 
-    void nextBtnClicked() {
-        if (musicFiles != null && !musicFiles.isEmpty()) {
-            playMedia(PlayerActivity.position); // Ensure the media is played from the new position
-        } else {
-            Log.e(TAG, "nextBtnClicked: musicFiles is empty or null");
-        }
-    }
 
     void playPauseButtonClicked() {
         if (actionPlaying != null) {
@@ -323,19 +319,6 @@ public class MusicService extends Service {
         }
     }
 
-    void previousBtnClicked() {
-        if (musicFiles != null && !musicFiles.isEmpty()) {
-            if (shuffleBoolean) {
-                position = new Random().nextInt(musicFiles.size());
-            } else {
-                position = (position - 1 < 0) ? (musicFiles.size() - 1) : (position - 1); // Loop back to end
-            }
-
-            playMedia(position); // Ensure the media is played from the new position
-        } else {
-            Log.e(TAG, "previousBtnClicked: musicFiles is empty or null");
-        }
-    }
 
     @Override
     public void onDestroy() {
