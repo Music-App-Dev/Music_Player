@@ -30,7 +30,7 @@
         android:layout_alignBottom="@id/frag_bottom_player"/>
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="70dp"
         android:layout_alignParentBottom="true"
         android:id="@+id/frag_bottom_player">
         <fragment

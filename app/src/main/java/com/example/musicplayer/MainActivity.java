@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
@@ -84,6 +85,9 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     private AlbumFragment albumFragment;
     private ViewPagerAdapter viewPagerAdapter;
 
+    private ArrayList<SpotifyTrack> allTracks = new ArrayList<>();
+    private HashSet<String> trackIds = new HashSet<>();
+
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
     protected void onCreate(Bundle savedInstanceState){
@@ -118,7 +122,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                     String accessToken = response.getAccessToken();
                     Log.d("MainActivity", "Access Token received: " + accessToken);
                     saveAccessToken(accessToken);
-                    loadSpotifyData();  // Ensure data is loaded after token retrieval
+                    loadSpotifyTracks(allTracks, trackIds);
+                    fetchTracksFromAlbums(allTracks, trackIds);
                     connectToSpotify();
                     break;
 
@@ -195,17 +200,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         albums.addAll(albumList);
         Log.d("MainActivity", "Displaying " + albums.size() + " albums.");
 
-        // Log each album's details
-//        for (int i = 0; i < albumList.size(); i++) {
-//            SpotifyAlbum album = albumList.get(i);
-//            Log.d("AlbumInfo", "Album " + (i + 1) + ":");
-//            Log.d("AlbumInfo", "  Name: " + album.getAlbumName());
-//            Log.d("AlbumInfo", "  Artist: " + album.getArtistName());
-//            Log.d("AlbumInfo", "  Image URL: " + album.getImageUrl());
-//            Log.d("AlbumInfo", "  Album ID: " + album.getAlbumId());
-//        }
-
-        // Check if AlbumFragment exists and update its data
         AlbumFragment albumFragment = (AlbumFragment) viewPagerAdapter.getFragment(1);
         if (albumFragment != null) {
             albumFragment.updateAlbumList(albums);
@@ -248,9 +242,11 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             Log.e("MainActivity", "SongsFragment is not available to update.");
         }
     }
+
     private void loadSpotifyData() {
         getUserSavedAlbums();
-        loadSpotifyTracks();
+        loadSpotifyTracks(allTracks, trackIds);
+        fetchTracksFromAlbums(allTracks, trackIds);
     }
 
     protected void startSpotifyAuth() {
@@ -311,7 +307,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             }
 
             if (allPermissionsGranted) {
-                loadSpotifyTracks();
+                loadSpotifyTracks(allTracks, trackIds);
+                fetchTracksFromAlbums(allTracks, trackIds);
                 initViewPager();
             } else {
                 Toast.makeText(this, "Permission Denied. Some features may not work.", Toast.LENGTH_SHORT).show();
@@ -369,12 +366,9 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         }
     }
 
-    private void loadSpotifyTracks() {
+    private void loadSpotifyTracks(ArrayList<SpotifyTrack> allTracks, HashSet<String> trackIds) {
         SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
         String accessToken = sharedPreferences.getString("access_token", null);
-
-        SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
-        String sortOrder = preferences.getString("sorting", "sortByName");
 
         if (accessToken == null) {
             Log.e("MainActivity", "Access token is missing or invalid. Re-authentication may be required.");
@@ -390,7 +384,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("MainActivity", "Failed to fetch tracks", e);
+                Log.e("MainActivity", "Failed to fetch liked tracks", e);
+                checkAllFetchesCompleted();  // Check completion to update the UI even if this request fails
             }
 
             @Override
@@ -401,36 +396,120 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                         JSONObject jsonObject = new JSONObject(responseData);
                         JSONArray items = jsonObject.getJSONArray("items");
 
-                        ArrayList<SpotifyTrack> fetchedSongs = new ArrayList<>();
-                        for (int i = 0; i < items.length(); i++) {
-                            JSONObject trackObject = items.getJSONObject(i).getJSONObject("track");
+                        synchronized (allTracks) {
+                            for (int i = 0; i < items.length(); i++) {
+                                JSONObject trackObject = items.getJSONObject(i).getJSONObject("track");
+                                String trackId = trackObject.getString("id");
 
-                            String trackName = trackObject.getString("name");
-                            String artistName = trackObject.getJSONArray("artists").getJSONObject(0).getString("name");
-                            String albumName = trackObject.getJSONObject("album").getString("name");
-                            String albumImageUrl = trackObject.getJSONObject("album").getJSONArray("images").getJSONObject(0).getString("url");
-                            String trackId = trackObject.getString("id");
-                            String duration = trackObject.getString("duration_ms");
-
-                            fetchedSongs.add(new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId));
+                                if (!trackIds.contains(trackId)) {
+                                    allTracks.add(parseTrackObject(trackObject, null));  // Pass null for album
+                                    trackIds.add(trackId);
+                                }
+                            }
                         }
 
-                        // Sort the fetched songs based on preference
-                        sortSpotifyTracks(fetchedSongs, sortOrder);
-
-                        runOnUiThread(() -> displayTracks(fetchedSongs));
+                        Log.d("MainActivity", "Liked tracks fetched: " + items.length());
+                        checkAllFetchesCompleted();
 
                     } catch (JSONException e) {
-                        Log.e("MainActivity", "Failed to parse track JSON", e);
+                        Log.e("MainActivity", "Failed to parse liked tracks JSON", e);
+                        checkAllFetchesCompleted();
                     }
                 } else {
                     Log.e("MainActivity", "Failed with response code: " + response.code());
+                    checkAllFetchesCompleted();
                 }
             }
         });
-
-
     }
+
+    private void fetchTracksFromAlbums(ArrayList<SpotifyTrack> allTracks, HashSet<String> trackIds) {
+        String accessToken = getAccessToken();
+        OkHttpClient client = new OkHttpClient();
+        final int[] completedRequests = {0};
+
+        for (SpotifyAlbum album : albums) {
+            Request albumTracksRequest = new Request.Builder()
+                    .url("https://api.spotify.com/v1/albums/" + album.getAlbumId() + "/tracks")
+                    .addHeader("Authorization", "Bearer " + accessToken)
+                    .build();
+
+            client.newCall(albumTracksRequest).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.e("MainActivity", "Failed to fetch tracks for album: " + album.getAlbumName(), e);
+                    checkAllRequestsCompleted();
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        String responseData = response.body().string();
+                        try {
+                            JSONObject jsonObject = new JSONObject(responseData);
+                            JSONArray items = jsonObject.getJSONArray("items");
+
+                            synchronized (allTracks) {
+                                for (int i = 0; i < items.length(); i++) {
+                                    JSONObject trackObject = items.getJSONObject(i);
+                                    String trackId = trackObject.getString("id");
+
+                                    if (!trackIds.contains(trackId)) {
+                                        allTracks.add(parseTrackObject(trackObject, album));
+                                        trackIds.add(trackId);
+                                    }
+                                }
+                            }
+
+                            Log.d("MainActivity", "Tracks fetched from album: " + album.getAlbumName() + ", Tracks: " + items.length());
+
+                        } catch (JSONException e) {
+                            Log.e("MainActivity", "Failed to parse album tracks JSON", e);
+                        }
+                    } else {
+                        Log.e("MainActivity", "Failed with response code: " + response.code());
+                    }
+                    checkAllRequestsCompleted();
+                }
+
+                private void checkAllRequestsCompleted() {
+                    synchronized (completedRequests) {
+                        completedRequests[0]++;
+                        if (completedRequests[0] == albums.size()) {
+                            checkAllFetchesCompleted();
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    private void checkAllFetchesCompleted() {
+        if (allTracks.isEmpty() || albums.size() == 0) {
+            Log.d("MainActivity", "No tracks to display or no albums found.");
+            return;
+        }
+
+        runOnUiThread(() -> {
+            SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
+            String sortOrder = preferences.getString("sorting", "sortByName");
+            sortSpotifyTracks(allTracks, sortOrder);
+            displayTracks(allTracks);
+        });
+    }
+
+    private SpotifyTrack parseTrackObject(JSONObject trackObject, @Nullable SpotifyAlbum album) throws JSONException {
+        String trackName = trackObject.getString("name");
+        String artistName = trackObject.getJSONArray("artists").getJSONObject(0).getString("name");
+        String albumName = album != null ? album.getAlbumName() : trackObject.getJSONObject("album").getString("name");
+        String albumImageUrl = album != null ? album.getImageUrl() : trackObject.getJSONObject("album").getJSONArray("images").getJSONObject(0).getString("url");
+        String trackId = trackObject.getString("id");
+        String duration = trackObject.getString("duration_ms");
+
+        return new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId);
+    }
+
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -472,8 +551,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
 
         if (item.getItemId() == R.id.by_name) {
             sortOrder = "sortByName";
-        } else if (item.getItemId() == R.id.by_date) {
-            sortOrder = "sortByDate";
+        } else if (item.getItemId() == R.id.by_album) {
+            sortOrder = "sortByAlbum";
         } else if (item.getItemId() == R.id.by_duration) {
             sortOrder = "sortByDuration";
         }
@@ -482,7 +561,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             editor.putString("sorting", sortOrder);
             editor.apply();
 
-            loadSpotifyTracks();  // Reload the tracks with the new sort order
+            loadSpotifyTracks(allTracks, trackIds);
+            fetchTracksFromAlbums(allTracks, trackIds);  // Reload the tracks with the new sort order
         }
 
         return super.onOptionsItemSelected(item);
@@ -493,8 +573,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             case "sortByName":
                 tracks.sort((t1, t2) -> t1.getTrackName().compareToIgnoreCase(t2.getTrackName()));
                 break;
-            case "sortByDuration":
-                tracks.sort((t1, t2) -> Integer.compare(Integer.parseInt(t1.getDuration()), Integer.parseInt(t2.getDuration())));
+            case "sortByAlbum":
+                tracks.sort((t1, t2) -> t1.getAlbumName().compareToIgnoreCase(t2.getAlbumName()));
                 break;
             default:
                 Log.w("SortDebug", "Unknown sort order: " + sortOrder);

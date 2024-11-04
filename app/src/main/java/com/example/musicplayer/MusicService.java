@@ -34,7 +34,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.util.Consumer;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.bumptech.glide.Glide;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
@@ -82,6 +84,7 @@ public class MusicService extends Service {
 
     }
 
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -120,6 +123,7 @@ public class MusicService extends Service {
                         break;
                 }
             }
+            broadcastTrackChange();
         } else {
             Log.w(TAG, "Received null intent in onStartCommand");
         }
@@ -147,70 +151,10 @@ public class MusicService extends Service {
                 });
     }
 
-
-    // Additional methods
-    public void seekTo(int positionInMillis) {
-        if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
-                if (playerState != null && playerState.track != null) {
-                    if (!playerState.track.isPodcast && !playerState.track.isEpisode) {
-                        spotifyAppRemote.getPlayerApi().seekTo(positionInMillis)
-                                .setResultCallback(empty -> Log.d(TAG, "Seeked to position: " + positionInMillis))
-                                .setErrorCallback(error -> {
-                                    Log.e(TAG, "Error seeking to position", error);
-                                    fallbackSeekTo(positionInMillis);
-                                });
-                    } else {
-                        Log.w(TAG, "Cannot seek in this track type.");
-                    }
-                } else {
-                    Log.w(TAG, "PlayerState or Track is null. Retrying seek...");
-                    retrySeek(positionInMillis);
-                }
-            }).setErrorCallback(error -> Log.e(TAG, "Error fetching player state", error));
-        } else {
-            Log.w(TAG, "SpotifyAppRemote is null. Falling back to Web API.");
-            fallbackSeekTo(positionInMillis);
-        }
-    }
-
-
-    private void fallbackSeekTo(int positionInMillis) {
-        String accessToken = getAccessToken(); // Retrieve your access token
-        if (accessToken == null) {
-            Log.e(TAG, "Access token is null, cannot seek using Web API.");
-            return;
-        }
-
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url("https://api.spotify.com/v1/me/player/seek?position_ms=" + positionInMillis)
-                .addHeader("Authorization", "Bearer " + accessToken)
-                .put(RequestBody.create("", null)) // PUT request needs an empty body
-                .build();
-
-        client.newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onResponse(@NonNull okhttp3.Call call, @NonNull Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    Log.d(TAG, "Seeked to position via Web API: " + positionInMillis);
-                } else {
-                    Log.e(TAG, "Failed to seek via Web API: " + response.message());
-                }
-            }
-
-            @Override
-            public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
-                Log.e(TAG, "Error seeking via Web API", e);
-
-            }
-
-        });
-    }
-
-
-    private void retrySeek(int positionInMillis) {
-        new Handler(Looper.getMainLooper()).postDelayed(() -> seekTo(positionInMillis), 1000); // Retry after 1 second
+    private void broadcastTrackChange() {
+        Intent intent = new Intent("com.example.musicplayer.TRACK_CHANGED");
+        intent.putExtra("TRACK_POSITION", position);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
     private String getAccessToken() {
@@ -330,27 +274,54 @@ public class MusicService extends Service {
         PendingIntent nextPending = PendingIntent.getBroadcast(this, 0, nextIntent, PendingIntent.FLAG_IMMUTABLE);
 
         SpotifyTrack currentTrack = musicFiles.get(position);
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID_2)
-                .setSmallIcon(playPauseBtn)
-                .setContentTitle(currentTrack.getTrackName())
-                .setContentText(currentTrack.getArtistName())
-                .addAction(R.drawable.ic_skip_previous, "Previous", prevPending)
-                .addAction(playPauseBtn, "Pause/Play", pausePending)
-                .addAction(R.drawable.ic_skip_next, "Next", nextPending)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setOnlyAlertOnce(true)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle())
-                .setContentIntent(contentIntent)
-                .build();
+        String imageUrl = currentTrack.getAlbumImageUrl();
 
-        startForeground(1, notification);
+        Bitmap defaultImage = BitmapFactory.decodeResource(getResources(), R.drawable.gradient_bg);
+
+        // Load the image on a background thread
+        new Thread(() -> {
+            Bitmap thumb = defaultImage; // Use the default image initially
+            try {
+                if (imageUrl != null && !imageUrl.isEmpty()) {
+                    thumb = Glide.with(this)
+                            .asBitmap()
+                            .load(imageUrl)
+                            .submit()
+                            .get();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading album image for notification", e);
+            }
+
+            // Create and show the notification on the main thread
+            Bitmap finalThumb = thumb;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID_2)
+                        .setSmallIcon(playPauseBtn)
+                        .setLargeIcon(finalThumb)
+                        .setContentTitle(currentTrack.getTrackName())
+                        .setContentText(currentTrack.getArtistName())
+                        .addAction(R.drawable.ic_skip_previous, "Previous", prevPending)
+                        .addAction(playPauseBtn, "Pause/Play", pausePending)
+                        .addAction(R.drawable.ic_skip_next, "Next", nextPending)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setOnlyAlertOnce(true)
+                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                        .setStyle(new NotificationCompat.BigPictureStyle()
+                                .bigPicture(finalThumb))
+                        .setContentIntent(contentIntent)
+                        .build();
+
+                startForeground(2, notification);
+            });
+        }).start();
     }
 
     void nextBtnClicked() {
         if (actionPlaying != null) {
             actionPlaying.nextBtnClicked();
         }
+        broadcastTrackChange();
     }
 
     void playPauseButtonClicked() {
@@ -363,6 +334,7 @@ public class MusicService extends Service {
         if (actionPlaying != null) {
             actionPlaying.prevBtnClicked();
         }
+        broadcastTrackChange();
     }
 
     @Override

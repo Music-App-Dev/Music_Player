@@ -10,15 +10,19 @@ import static com.example.musicplayer.MusicService.musicFiles;
 import static com.example.musicplayer.MusicService.position;
 
 
+import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.media.MediaMetadataRetriever;
 import android.os.Bundle;
 
 import androidx.fragment.app.Fragment;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import android.os.IBinder;
 import android.util.Log;
@@ -32,7 +36,7 @@ import com.bumptech.glide.Glide;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 
-public class NowPlayingFragment extends Fragment implements ServiceConnection {
+public class NowPlayingFragment extends Fragment implements ServiceConnection{
 
     ImageView nextBtn, albumArt;
     TextView artist, songName;
@@ -58,11 +62,13 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
         nextBtn = view.findViewById(R.id.skip_next_button);
         playPauseBtn  = view.findViewById(R.id.play_miniPlayer);
         playPauseBtn.setImageResource(R.drawable.ic_pause);
+
+        setDefaultUI();
+
         nextBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if(musicService != null){
-                    updateUI();
                     musicService.nextBtnClicked();
                     if(getActivity() != null) {
                         SharedPreferences.Editor editor = getActivity().getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE)
@@ -123,21 +129,40 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
         return view;
     }
 
+    private void setDefaultUI() {
+        // Set default text and placeholder image
+        songName.setText(R.string.default_song_name);
+        artist.setText(R.string.default_artist_name);
+        playPauseBtn.setImageResource(R.drawable.ic_pause);
+    }
+
+
     @Override
     public void onResume() {
         super.onResume();
-        if(SHOW_MINI_PLAYER){
-            if(PATH_TO_FRAG != null){
-                displayAlbumArt();
-                songName.setText(SONG_TO_FRAG);
-                artist.setText(ARTIST_TO_FRAG);
-            }
+        if (SHOW_MINI_PLAYER && PATH_TO_FRAG != null) {
+            displayAlbumArt();
+            songName.setText(SONG_TO_FRAG);
+            artist.setText(ARTIST_TO_FRAG);
+        } else {
+            setDefaultUI();
         }
+
         Intent intent = new Intent(getContext(), MusicService.class);
-        if(getContext() != null){
+        if (getContext() != null) {
             getContext().bindService(intent, this, Context.BIND_AUTO_CREATE);
         }
     }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (getContext() != null) {
+            getContext().unbindService(this);
+        }
+    }
+
+
 
     private void displayAlbumArt() {
         if (musicService != null && musicFiles != null && position >= 0 && position < musicFiles.size()) {
@@ -163,17 +188,10 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
             displayAlbumArt();
         } else {
             Log.e("NowPlayingFragment", "Invalid position or musicFiles is null.");
+            setDefaultUI();
         }
-    }
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        if(getContext() != null){
-            getContext().unbindService(this);
-        }
     }
-
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder service) {
@@ -184,6 +202,8 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
 
     @Override
     public void onServiceDisconnected(ComponentName componentName) {
-        musicService = null;
+
     }
+
+
 }

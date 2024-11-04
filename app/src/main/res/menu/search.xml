@@ -17,8 +17,8 @@
                 android:id="@+id/by_name"
                 app:showAsAction="never"/>
             <item
-                android:title="Date"
-                android:id="@+id/by_date"
+                android:title="Album"
+                android:id="@+id/by_album"
                 app:showAsAction="never"/>
             <item
                 android:title="Duration"

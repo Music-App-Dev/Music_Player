@@ -16,12 +16,13 @@ import android.widget.Toast;
 import com.bumptech.glide.Glide;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 
 public class AlbumDetails extends AppCompatActivity {
 
     RecyclerView recyclerView;
     ImageView albumPhoto, backBtn;
-    String albumName, albumId;
+    String albumName, albumId, albumImageUrl;
     ArrayList<SpotifyTrack> albumSongs = new ArrayList<>();
     AlbumDetailsAdapter albumDetailsAdapter;
     TextView albumTopName;
@@ -37,6 +38,7 @@ public class AlbumDetails extends AppCompatActivity {
 
         albumName = getIntent().getStringExtra("albumName");
         albumId = getIntent().getStringExtra("albumId");
+        albumImageUrl = getIntent().getStringExtra("albumImageUrl");
 
         albumTopName = findViewById(R.id.album_details_album_name);
         albumTopName.setText(albumName);
@@ -57,16 +59,19 @@ public class AlbumDetails extends AppCompatActivity {
     }
 
     private void fetchSpotifyAlbumDetails(String albumId) {
-        SpotifyApiHelper.fetchAlbumTracks(this, albumId, new SpotifyApiHelper.SpotifyAlbumCallback() {
+        SpotifyApiHelper.fetchAlbumTracks(this, albumId, albumName, albumImageUrl, new SpotifyApiHelper.SpotifyAlbumCallback() {
             @Override
             public void onSuccess(ArrayList<SpotifyTrack> tracks, String albumArtUrl) {
-                Log.d("AlbumDetails", "Tracks fetched: " + tracks.size());
+                Log.d("AlbumDetails", "Tracks fetched: " + tracks.size());  // Log track count
                 Log.d("AlbumDetails", "Album art URL: " + albumArtUrl);
 
                 runOnUiThread(() -> {
                     albumSongs.clear();
                     albumSongs.addAll(tracks);
+                    Log.d("AlbumDetails", "Album songs size: " + albumSongs.size());  // Ensure tracks are added
+
                     albumDetailsAdapter.notifyDataSetChanged(); // Notify adapter of data change
+                    Log.d("AlbumDetails", "Adapter notified");
 
                     if (albumArtUrl != null && !albumArtUrl.isEmpty()) {
                         Glide.with(AlbumDetails.this).load(albumArtUrl).into(albumPhoto);
@@ -87,9 +92,9 @@ public class AlbumDetails extends AppCompatActivity {
 
 
     private void setupRecyclerView() {
+        recyclerView.setLayoutManager(new LinearLayoutManager(this, RecyclerView.VERTICAL, false));
         albumDetailsAdapter = new AlbumDetailsAdapter(this, albumSongs);
         recyclerView.setAdapter(albumDetailsAdapter);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this, RecyclerView.VERTICAL, false));
     }
 
     @Override
@@ -102,9 +107,4 @@ public class AlbumDetails extends AppCompatActivity {
         }
     }
 
-    private byte[] getAlbumArt(String uri){
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(uri.toString());
-        return retriever.getEmbeddedPicture();
-    }
 }

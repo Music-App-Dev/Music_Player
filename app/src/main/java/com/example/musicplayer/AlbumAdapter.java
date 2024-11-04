@@ -50,6 +50,7 @@ public class AlbumAdapter extends RecyclerView.Adapter<AlbumAdapter.MyHolder> {
                 Intent intent = new Intent(mContext, AlbumDetails.class);
                 intent.putExtra("albumId", album.getAlbumId()); // Pass album ID to AlbumDetails activity
                 intent.putExtra("albumName", album.getAlbumName());
+                intent.putExtra("albumImageUrl", album.getImageUrl());
                 mContext.startActivity(intent);
             }
         });
@@ -77,9 +78,4 @@ public class AlbumAdapter extends RecyclerView.Adapter<AlbumAdapter.MyHolder> {
         notifyDataSetChanged();
     }
 
-    private byte[] getAlbumArt(String uri){
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(uri.toString());
-        return retriever.getEmbeddedPicture();
-    }
 }

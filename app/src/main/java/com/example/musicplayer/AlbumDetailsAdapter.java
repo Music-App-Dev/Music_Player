@@ -19,11 +19,11 @@ import java.util.ArrayList;
 
 public class AlbumDetailsAdapter extends RecyclerView.Adapter<AlbumDetailsAdapter.MyHolder> {
     private final Context mContext;
-    public static ArrayList<SpotifyTrack> albumFiles;
+    public static ArrayList<SpotifyTrack> albumTracks;
     View view;
-    public AlbumDetailsAdapter(Context mContext, ArrayList<SpotifyTrack> albumFiles){
+    public AlbumDetailsAdapter(Context mContext, ArrayList<SpotifyTrack> albumTracks){
         this.mContext = mContext;
-        this.albumFiles = albumFiles;
+        this.albumTracks = albumTracks;
     }
 
     @NonNull
@@ -36,50 +36,53 @@ public class AlbumDetailsAdapter extends RecyclerView.Adapter<AlbumDetailsAdapte
 
 
     @Override
-    public void onBindViewHolder(@NonNull MyHolder holder, @SuppressLint("RecyclerView") final int position) {
-        SpotifyTrack album = albumFiles.get(position);
+    public void onBindViewHolder(@NonNull MyHolder holder, int position) {
+        SpotifyTrack track = albumTracks.get(position);
 
-        holder.album_name.setText(album.getAlbumName());
+        // Set track name
+        holder.track_name.setText(track.getTrackName());
 
-        // Use Spotify's image URL instead of local album art
-        String albumArtUrl = album.getAlbumImageUrl();
+        // Load album art
+        String albumArtUrl = track.getAlbumImageUrl();
         if (albumArtUrl != null && !albumArtUrl.isEmpty()) {
             Glide.with(mContext).load(albumArtUrl).into(holder.album_image);
         } else {
-            // Set a placeholder if no album art is available
-            Glide.with(mContext).load(R.drawable.tab_indicator).into(holder.album_image);
+            Glide.with(mContext).load(R.drawable.tab_indicator).into(holder.album_image); // Placeholder
         }
 
-        holder.itemView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent = new Intent(mContext, PlayerActivity.class);
-                intent.putExtra("sender", "albumDetails");
-                intent.putExtra("position", position);
-                intent.putExtra("album_id", album.getTrackId());  // Pass album ID to PlayerActivity
-                mContext.startActivity(intent);
-            }
+        // Handle item click
+        holder.itemView.setOnClickListener(view -> {
+            Intent intent = new Intent(mContext, PlayerActivity.class);
+            intent.putExtra("trackId", track.getTrackId());
+            intent.putExtra("trackName", track.getTrackName());
+            intent.putExtra("artistName", track.getArtistName());
+            intent.putExtra("albumName", track.getAlbumName());
+            intent.putExtra("albumImageUrl", track.getAlbumImageUrl());
+            intent.putExtra("position", position);
+            intent.putParcelableArrayListExtra("trackList", albumTracks);
+            mContext.startActivity(intent);
         });
     }
 
     @Override
     public int getItemCount() {
-        return albumFiles.size();
+        return albumTracks.size();
     }
 
     public class MyHolder extends RecyclerView.ViewHolder {
         ImageView album_image;
-        TextView album_name;
+        TextView track_name;
         public MyHolder(@NonNull View itemView) {
             super(itemView);
             album_image = itemView.findViewById(R.id.music_img);
-            album_name = itemView.findViewById(R.id.music_file_name);
+            track_name = itemView.findViewById(R.id.music_file_name);
         }
     }
 
     // Method to update the albums list in the adapter dynamically
-    public void updateAlbums(ArrayList<SpotifyTrack> newAlbums) {
-        albumFiles = newAlbums;
+    public void updateTracks(ArrayList<SpotifyTrack> newTracks) {
+        albumTracks.clear();
+        albumTracks.addAll(newTracks);
         notifyDataSetChanged();
     }
 

@@ -8,13 +8,12 @@
 
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="70dp"
         android:id="@+id/card_bottom_player"
-        android:background="@color/colorPrimaryDark"
-        android:padding="5dp">
+        android:background="@color/colorPrimaryDark">
         <ImageView
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="70dp"
+            android:layout_height="70dp"
             android:src="@drawable/gradient_bg"
             android:id="@+id/bottom_album_art"
             android:scaleType="centerCrop"/>
@@ -40,7 +39,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:id="@+id/song_name_miniPlayer"
-            android:text="Song Name"
+            android:text="@string/default_song_name"
             android:textColor="#fff"
             android:layout_marginTop="5dp"
             android:layout_marginStart="15dp"
@@ -52,7 +51,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:id="@+id/song_artist_miniPlayer"
-            android:text="Arist Name"
+            android:text="@string/default_artist_name"
             android:textColor="#fff"
             android:layout_marginTop="5dp"
             android:layout_marginStart="15dp"

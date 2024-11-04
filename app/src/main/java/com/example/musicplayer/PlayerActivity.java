@@ -1,6 +1,5 @@
 package com.example.musicplayer;
 
-import static com.example.musicplayer.AlbumDetailsAdapter.albumFiles;
 import static com.example.musicplayer.MainActivity.REQUEST_CODE;
 import static com.example.musicplayer.MainActivity.repeatBoolean;
 import static com.example.musicplayer.MainActivity.shuffleBoolean;
@@ -12,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import androidx.core.content.ContextCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.palette.graphics.Palette;
 
 import android.content.ComponentName;
@@ -49,6 +49,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
+import com.spotify.protocol.types.PlayerState;
 import com.spotify.sdk.android.auth.AuthorizationClient;
 import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
@@ -72,6 +73,11 @@ public class PlayerActivity extends AppCompatActivity
 
     private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
     private static final String REDIRECT_URI = "com.example.musicplayer://callback";
+
+    private boolean isChangingTrack = false;
+
+    private boolean isSubscribed = false;
+    boolean isSpotifyConnecting = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,7 +114,6 @@ public class PlayerActivity extends AppCompatActivity
                 case TOKEN:
                     String accessToken = response.getAccessToken();
                     Log.d("MainActivity", "Access Token received: " + accessToken);
-                    connectSpotifyRemote(accessToken);
                     break;
                 case ERROR:
                     Log.e("MainActivity", "Authorization error: " + response.getError());
@@ -130,6 +135,11 @@ public class PlayerActivity extends AppCompatActivity
     }
 
     private void connectSpotifyRemote(String accessToken) {
+        if (isSpotifyConnecting || (spotifyAppRemote != null && spotifyAppRemote.isConnected())) {
+            Log.d("PlayerActivity", "Spotify is already connecting or connected.");
+            return;
+        }
+        isSpotifyConnecting = true;
         Log.d("PlayerActivity", "Attempting to connect with Access Token: " + accessToken);
 
         if (accessToken != null) {
@@ -195,19 +205,8 @@ public class PlayerActivity extends AppCompatActivity
         Intent intent = new Intent(this, MusicService.class);
         bindService(intent, this, BIND_AUTO_CREATE);
 
-        if (spotifyAppRemote != null) {
-            handler.post(updateSeekBarRunnable); // Start updating seekbar
-            musicService.subscribeToPlayerStateUpdates(playerState -> {
-                if (playerState != null && playerState.track != null) {
-                    int duration = (int) (playerState.track.duration / 1000); // Duration in seconds
-                    seekBar.setMax(duration);
-                    seekBar.setProgress((int) (playerState.playbackPosition / 1000)); // Current position in seconds
-                    duration_played.setText(formattedTime((int) (playerState.playbackPosition / 1000)));
-                    duration_total.setText(formattedTime(duration));
-                } else {
-                    Log.w("PlayerActivity", "PlayerState or Track is null during onResume.");
-                }
-            });
+        if (spotifyAppRemote != null && musicService != null) {
+            handler.post(updateSeekBarRunnable); // Start updating seekbar if not already started
         }
     }
 
@@ -228,7 +227,7 @@ public class PlayerActivity extends AppCompatActivity
         if (musicService != null) {
             musicService.unsubscribeFromPlayerStateUpdates(); // Unsubscribe from updates
         }
-
+        isSubscribed = false;
         unbindService(this);
     }
 
@@ -269,15 +268,21 @@ public class PlayerActivity extends AppCompatActivity
         public void run() {
             if (spotifyAppRemote != null) {
                 spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
-                    int currentPosition = (int) (playerState.playbackPosition / 1000); // in seconds
-                    seekBar.setProgress(currentPosition);
-                    duration_played.setText(formattedTime(currentPosition));
+                    if (playerState != null && playerState.track != null) {
+                        int currentPosition = (int) (playerState.playbackPosition / 1000); // in seconds
+                        int duration = (int) (playerState.track.duration / 1000); // in seconds
+                        if (!seekBar.isPressed()) {
+                            seekBar.setMax(duration);
+                            seekBar.setProgress(currentPosition);
+                            duration_played.setText(formattedTime(currentPosition));
+                            duration_total.setText(formattedTime(duration));
+                        }
+                    }
                     handler.postDelayed(updateSeekBarRunnable, 1000);
                 });
             }
         }
     };
-
     public void playPauseBtnClicked() {
         if (spotifyAppRemote != null) {
             spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
@@ -296,40 +301,74 @@ public class PlayerActivity extends AppCompatActivity
         }
     }
 
+
     private void changeTrack(boolean isNext) {
+        if (isChangingTrack) return;
+        isChangingTrack = true;
+        seekBar.setProgress(0);
+        duration_played.setText(formattedTime(0));
+
+
         if (spotifyAppRemote != null) {
-            if (shuffleBoolean && !repeatBoolean) {
-                position = getRandom(listSongs.size() - 1);
-            } else if (!shuffleBoolean && !repeatBoolean) {
-                position = isNext ? (position + 1) % listSongs.size() : (position - 1 < 0 ? listSongs.size() - 1 : position - 1);
+
+            if (isNext) {
+                if (shuffleBoolean && !repeatBoolean) {
+                    position = getRandom(listSongs.size() - 1);
+                } else {
+                    position = (position + 1) % listSongs.size();
+                }
+            } else {
+                position = (position - 1 < 0) ? listSongs.size() - 1 : position - 1;
             }
+
             SpotifyTrack selectedTrack = listSongs.get(position);
             String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
+
+            SharedPreferences.Editor editor = getSharedPreferences(MainActivity.MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
+            editor.putString(MainActivity.MUSIC_FILE, selectedTrack.getAlbumImageUrl());
+            editor.putString(MainActivity.ARTIST_NAME, selectedTrack.getArtistName());
+            editor.putString(MainActivity.SONG_NAME, selectedTrack.getTrackName());
+            editor.apply();
+
+            // Set the flag to show the mini-player
+            MainActivity.SHOW_MINI_PLAYER = true;
 
             spotifyAppRemote.getPlayerApi().play(spotifyUri).setResultCallback(empty -> {
                 handler.post(updateSeekBarRunnable); // Start updating seekbar
                 song_name.setText(selectedTrack.getTrackName());
                 artist_name.setText(selectedTrack.getArtistName());
+                updateUIWithCurrentTrack(selectedTrack);
+                isChangingTrack = false;
                 Glide.with(this)
+                        .asBitmap()
                         .load(selectedTrack.getAlbumImageUrl())
                         .placeholder(R.drawable.gradient_bg) // Set gradient as a placeholder
-                        .into(cover_art);
-                Glide.with(this).load(selectedTrack.getAlbumImageUrl()).into(cover_art);
+                        .into(new BitmapImageViewTarget(cover_art) {
+                            @Override
+                            protected void setResource(Bitmap resource) {
+                                if (resource != null && !resource.isRecycled()) {
+                                    ImageAnimation(PlayerActivity.this, cover_art, resource); // Smooth fade-in animation
+                                } else {
+                                    cover_art.setImageResource(R.drawable.gradient_bg); // Fallback to default gradient
+                                }
+                            }
+                        });
+
                 playPauseBtn.setImageResource(R.drawable.ic_pause);
                 musicService.showNotification(R.drawable.ic_pause);
-
-                spotifyAppRemote.getPlayerApi().subscribeToPlayerState().setEventCallback(playerState -> {
-                    if (playerState.track != null) {
-                        int duration = (int) (playerState.track.duration / 1000);
-                        seekBar.setMax(duration);
-                        seekBar.setProgress((int) (playerState.playbackPosition / 1000));
-                    }
-                });
             }).setErrorCallback(error -> Log.e("MusicService", "Error playing track: " + error.getMessage()));
+        } else {
+            isChangingTrack = false;
         }
     }
 
+
     public void nextBtnClicked() {
+        if (shuffleBoolean) {
+            position = getRandom(listSongs.size() - 1);
+        } else {
+            position = (position + 1) % listSongs.size();
+        }
         changeTrack(true);
     }
 
@@ -349,11 +388,19 @@ public class PlayerActivity extends AppCompatActivity
 
     private void getIntentMethod() {
         Intent intent = getIntent();
+
+        // Get position and track details
         position = intent.getIntExtra("position", -1);
         listSongs = intent.getParcelableArrayListExtra("trackList");
 
-
         if (listSongs != null && !listSongs.isEmpty() && position >= 0 && position < listSongs.size()) {
+            SpotifyTrack selectedTrack = listSongs.get(position);
+
+            // Update UI with track details
+            song_name.setText(selectedTrack.getTrackName());
+            artist_name.setText(selectedTrack.getArtistName());
+            Glide.with(this).load(selectedTrack.getAlbumImageUrl()).into(cover_art);
+
             playPauseBtn.setImageResource(R.drawable.ic_pause);
         } else {
             Log.e("PlayerActivity", "Invalid song position or empty list.");
@@ -361,6 +408,7 @@ public class PlayerActivity extends AppCompatActivity
             finish();
         }
 
+        // Start service for music control
         Intent serviceIntent = new Intent(this, MusicService.class);
         serviceIntent.putExtra("servicePosition", position);
         startService(serviceIntent);
@@ -398,17 +446,7 @@ public class PlayerActivity extends AppCompatActivity
                             super.setResource(resource);
                             if (resource != null && !resource.isRecycled()) {
                                 ImageAnimation(PlayerActivity.this, cover_art, resource);
-
-                                Palette.from(resource).generate(palette -> {
-                                    if (palette != null) {
-                                        Palette.Swatch swatch = palette.getDominantSwatch();
-                                        if (swatch != null) {
-                                            updateUIWithSwatch(swatch);
-                                        } else {
-                                            applyDefaultStyles();
-                                        }
-                                    }
-                                });
+                                extractPalette(resource); // Extract palette after image is loaded
                             } else {
                                 Log.e("PlayerActivity", "Bitmap is invalid or null");
                                 applyDefaultStyles(); // Fallback in case of an invalid Bitmap
@@ -421,6 +459,20 @@ public class PlayerActivity extends AppCompatActivity
         }
     }
 
+    private void extractPalette(Bitmap bitmap) {
+        Palette.from(bitmap).generate(palette -> {
+            if (palette != null) {
+                Palette.Swatch swatch = palette.getDominantSwatch();
+                if (swatch != null) {
+                    updateUIWithSwatch(swatch);
+                } else {
+                    applyDefaultStyles();
+                }
+            } else {
+                applyDefaultStyles(); // Fallback if Palette generation fails
+            }
+        });
+    }
     private void updateUIWithSwatch(Palette.Swatch swatch) {
         ImageView gradient = findViewById(R.id.imageViewGradient);
         RelativeLayout mContainer = findViewById(R.id.mContainer);
@@ -483,6 +535,7 @@ public class PlayerActivity extends AppCompatActivity
 
         // Ensure we have a valid list of songs and position
         if (listSongs != null && !listSongs.isEmpty() && position >= 0 && position < listSongs.size()) {
+
             SpotifyTrack currentTrack = listSongs.get(position);
 
             // Show notification and setup UI updates
@@ -492,11 +545,18 @@ public class PlayerActivity extends AppCompatActivity
             // Listen to playback state updates via musicService
             musicService.subscribeToPlayerStateUpdates(playerState -> {
                 if (playerState.track != null) {
-                    int duration = (int) (playerState.track.duration / 1000); // Duration in seconds
-                    seekBar.setMax(duration);
-                    seekBar.setProgress((int) (playerState.playbackPosition / 1000)); // Current position in seconds
-                    duration_played.setText(formattedTime((int) (playerState.playbackPosition / 1000)));
-                    duration_total.setText(formattedTime(duration));
+                    int currentPosition = (int) (playerState.playbackPosition / 1000);
+                    int duration = (int) (playerState.track.duration / 1000);
+
+                    // Check if the track is at its end
+                    if (currentPosition >= duration - 1) {
+                        nextBtnClicked(); // Move to the next track
+                    } else {
+                        seekBar.setMax(duration);
+                        seekBar.setProgress(currentPosition);
+                        duration_played.setText(formattedTime(currentPosition));
+                        duration_total.setText(formattedTime(duration));
+                    }
                 }
             });
         } else {
