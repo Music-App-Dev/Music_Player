@@ -120,5 +120,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgements
 
 - [Android Developers Documentation](https://developer.android.com/docs)
-- Icons from [Material Design Icons](https://material.io/resources/icons/)
-- Special thanks to [OpenAI](https://openai.com/) for assistance in documentation.
+- Spotify for [API Documentations]([https://material.io/resources/icons/](https://developer.spotify.com/documentation/web-api))
+- Alex
