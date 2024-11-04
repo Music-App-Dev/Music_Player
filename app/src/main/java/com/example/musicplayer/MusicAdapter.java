@@ -28,10 +28,10 @@ import java.util.ArrayList;
 public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder> {
 
     private Context mContext;
-    static ArrayList<MusicFiles> mFiles;
+    static ArrayList<SpotifyTrack> mFiles;
 
 
-    MusicAdapter(Context mContext, ArrayList<MusicFiles> mFiles){
+    MusicAdapter(Context mContext, ArrayList<SpotifyTrack> mFiles){
         this.mFiles = mFiles;
         this.mContext = mContext;
     }
@@ -44,59 +44,30 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
     }
 
     @Override
-    public void onBindViewHolder(@NonNull MyViewHolder holder, @SuppressLint("RecyclerView") int position) {
-        holder.file_name.setText(mFiles.get(position).getTitle());
-        byte[] image = getAlbumArt(mFiles.get(position).getPath());
-        if(image != null){
-            Glide.with(mContext).asBitmap().load(image).into(holder.album_art);
+    public void onBindViewHolder(@NonNull MyViewHolder holder, int position) {
+        SpotifyTrack track = mFiles.get(position);
+        holder.file_name.setText(track.getTrackName());
+        holder.artist_name.setText(track.getArtistName());
+        Glide.with(mContext).load(track.getAlbumImageUrl()).into(holder.album_art);
 
-        }
-        else {
-            Glide.with(mContext).load(R.drawable.tab_indicator).into(holder.album_art);
-        }
-
-        holder.itemView.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v){
-                Intent intent = new Intent(mContext, PlayerActivity.class);
-                intent.putExtra("position", position);
-                mContext.startActivity(intent);
-            }
+        holder.itemView.setOnClickListener(v -> {
+            Intent intent = new Intent(mContext, PlayerActivity.class);
+            intent.putExtra("position", position); // Pass the exact position
+            intent.putParcelableArrayListExtra("trackList", mFiles); // Pass the full list of tracks
+            mContext.startActivity(intent);
         });
 
-        holder.menuMore.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(final View v) {
-                PopupMenu popupMenu = new PopupMenu(mContext, v);
-                popupMenu.getMenuInflater().inflate(R.menu.popup, popupMenu.getMenu());
-                popupMenu.show();
-                popupMenu.setOnMenuItemClickListener((item) -> {
-                    if (item.getItemId() == R.id.delete) {
-                        Toast.makeText(mContext, "Delete Clicked!!", Toast.LENGTH_SHORT).show();
-                        deleteFile(position, v);
-                    }
-                    return true;
-                });
-            }
+        holder.menuMore.setOnClickListener(v -> {
+            PopupMenu popupMenu = new PopupMenu(mContext, v);
+            popupMenu.getMenuInflater().inflate(R.menu.popup, popupMenu.getMenu());
+            popupMenu.show();
+            popupMenu.setOnMenuItemClickListener(item -> {
+                if (item.getItemId() == R.id.delete) {
+                    Toast.makeText(mContext, "Delete option is not applicable for Spotify tracks", Toast.LENGTH_SHORT).show();
+                }
+                return true;
+            });
         });
-
-    }
-
-    private void deleteFile(int position, View v){
-        Uri contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                Long.parseLong(mFiles.get(position).getId()));
-        File file = new File(mFiles.get(position).getPath());
-        boolean deleted = file.delete();
-        if(deleted){
-            mContext.getContentResolver().delete(contentUri, null, null);
-            mFiles.remove(position);
-            notifyItemRemoved(position);
-            notifyItemRangeChanged(position, mFiles.size());
-            Snackbar.make(v, "File Deleted : ", Snackbar.LENGTH_LONG).show();
-        } else {
-            Snackbar.make(v, "Not Deleted : ", Snackbar.LENGTH_LONG).show();
-        }
     }
 
     @Override
@@ -104,28 +75,22 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
         return mFiles.size();
     }
 
-    public class MyViewHolder extends RecyclerView.ViewHolder{
-
-        TextView file_name;
+    public class MyViewHolder extends RecyclerView.ViewHolder {
+        TextView file_name, artist_name;
         ImageView album_art, menuMore;
 
         public MyViewHolder(@NonNull View itemView) {
             super(itemView);
             file_name = itemView.findViewById(R.id.music_file_name);
+            artist_name = itemView.findViewById(R.id.artist_name);
             album_art = itemView.findViewById(R.id.music_img);
             menuMore = itemView.findViewById(R.id.menuMore);
-
         }
     }
-    private byte[] getAlbumArt(String uri){
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(uri.toString());
-        return retriever.getEmbeddedPicture();
-    }
 
-    void updateList(ArrayList<MusicFiles> musicFilesArrayList){
-        mFiles = new ArrayList<>();
-        mFiles.addAll(musicFilesArrayList);
+    public void updateList(ArrayList<SpotifyTrack> trackList) {
+        mFiles.clear();
+        mFiles.addAll(trackList);
         notifyDataSetChanged();
     }
 }

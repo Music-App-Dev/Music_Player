@@ -46,7 +46,7 @@
 
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="350dp"
+        android:layout_height="450dp"
         android:id="@+id/card"
         android:layout_below="@id/layout_top_btn">
 
@@ -143,12 +143,13 @@
             android:src="@drawable/ic_play" />
 
     </RelativeLayout>
-    
+
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="60dp"
         android:layout_above="@id/relative_layout_for_bottom"
-        android:layout_marginBottom="15dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="10dp"
         android:id="@+id/seek_bar_layout">
         <TextView
             android:layout_width="wrap_content"

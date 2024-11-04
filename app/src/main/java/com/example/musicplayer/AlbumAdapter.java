@@ -17,10 +17,10 @@ import com.bumptech.glide.Glide;
 import java.util.ArrayList;
 
 public class AlbumAdapter extends RecyclerView.Adapter<AlbumAdapter.MyHolder> {
-    private Context mContext;
-    private ArrayList<MusicFiles> albumFiles;
+    private final Context mContext;
+    private final ArrayList<SpotifyAlbum> albumFiles;
     View view;
-    public AlbumAdapter(Context mContext, ArrayList<MusicFiles> albumFiles){
+    public AlbumAdapter(Context mContext, ArrayList<SpotifyAlbum> albumFiles){
         this.mContext = mContext;
         this.albumFiles = albumFiles;
     }
@@ -34,20 +34,23 @@ public class AlbumAdapter extends RecyclerView.Adapter<AlbumAdapter.MyHolder> {
 
     @Override
     public void onBindViewHolder(@NonNull MyHolder holder, final int position) {
-        holder.album_name.setText(albumFiles.get(position).getAlbum());
-        byte[] image = getAlbumArt(albumFiles.get(position).getPath());
-        if(image != null){
-            Glide.with(mContext).asBitmap().load(image).into(holder.album_image);
+        SpotifyAlbum album = albumFiles.get(position);
+        holder.album_name.setText(album.getAlbumName());
 
-        }
-        else {
-            Glide.with(mContext).load(R.drawable.tab_indicator).into(holder.album_image);
-        }
+        // Load album image using Glide
+        Glide.with(mContext)
+                .load(album.getImageUrl())
+                .placeholder(R.drawable.tab_indicator) // Placeholder in case image URL is null
+                .into(holder.album_image);
+
+        // Set click listener to open album details
         holder.itemView.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v){
+            public void onClick(View v) {
                 Intent intent = new Intent(mContext, AlbumDetails.class);
-                intent.putExtra("albumName", albumFiles.get(position).getAlbum());
+                intent.putExtra("albumId", album.getAlbumId()); // Pass album ID to AlbumDetails activity
+                intent.putExtra("albumName", album.getAlbumName());
+                intent.putExtra("albumImageUrl", album.getImageUrl());
                 mContext.startActivity(intent);
             }
         });
@@ -68,9 +71,11 @@ public class AlbumAdapter extends RecyclerView.Adapter<AlbumAdapter.MyHolder> {
         }
     }
 
-    private byte[] getAlbumArt(String uri){
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        retriever.setDataSource(uri.toString());
-        return retriever.getEmbeddedPicture();
+    // Method to update the album list and notify the adapter
+    public void updateAlbums(ArrayList<SpotifyAlbum> newAlbums) {
+        albumFiles.clear();
+        albumFiles.addAll(newAlbums);
+        notifyDataSetChanged();
     }
+
 }
