@@ -348,7 +348,7 @@ public class PlayerActivity extends AppCompatActivity
     }
 
 
-    private void changeTrack(boolean isNext) {
+    public void changeTrack(boolean isNext) {
         seekBar.setProgress(0);
         duration_played.setText(formattedTime(0));
 
@@ -375,7 +375,7 @@ public class PlayerActivity extends AppCompatActivity
             SpotifyTrack selectedTrack = listSongs.get(position);
             String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
             sharedViewModel.setCurrentTrack(selectedTrack);
-
+            MusicService.playMedia(position, false);
             SharedPreferences.Editor editor = getSharedPreferences(MainActivity.MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
             editor.putString(MainActivity.MUSIC_FILE, selectedTrack.getAlbumImageUrl());
             editor.putString(MainActivity.ARTIST_NAME, selectedTrack.getArtistName());
@@ -417,13 +417,10 @@ public class PlayerActivity extends AppCompatActivity
     public void nextBtnClicked() {
         Log.d("MusicService", "Next button clicked, current position: " + position);
         changeTrack(true);
-        musicService.nextBtnClicked();
         Log.d("MusicService", "UI update after next button, new position: " + position);
     }
 
     public void prevBtnClicked() {
-        musicService.previousBtnClicked();
-
         changeTrack(false);
     }
 

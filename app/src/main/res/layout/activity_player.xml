@@ -93,7 +93,7 @@
 
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp"
+        android:layout_height="100dp"
         android:id="@+id/relative_layout_for_bottom"
         android:layout_alignParentBottom="true"
         android:layout_alignParentStart="true"
