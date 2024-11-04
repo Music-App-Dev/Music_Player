@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import androidx.core.content.ContextCompat;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.palette.graphics.Palette;
 
@@ -76,8 +77,9 @@ public class PlayerActivity extends AppCompatActivity
 
     private boolean isChangingTrack = false;
 
-    private boolean isSubscribed = false;
     boolean isSpotifyConnecting = false;
+
+    private SharedViewModel sharedViewModel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +89,8 @@ public class PlayerActivity extends AppCompatActivity
         initViews();
         getIntentMethod();
         setupListeners();
+
+        sharedViewModel = new ViewModelProvider(this).get(SharedViewModel.class);
 
         // Retrieve the access token from SharedPreferences or initiate authorization
         String accessToken = getAccessToken();
@@ -227,7 +231,6 @@ public class PlayerActivity extends AppCompatActivity
         if (musicService != null) {
             musicService.unsubscribeFromPlayerStateUpdates(); // Unsubscribe from updates
         }
-        isSubscribed = false;
         unbindService(this);
     }
 
@@ -253,13 +256,22 @@ public class PlayerActivity extends AppCompatActivity
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (spotifyAppRemote != null && fromUser) {
+                    Log.d("SeekBar", "User changed seek bar position to: " + progress);
                     spotifyAppRemote.getPlayerApi().seekTo(progress * 1000);
                 }
             }
+
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                Log.d("SeekBar", "User started tracking seek bar");
+                handler.removeCallbacks(updateSeekBarRunnable); // Pause automatic updates
+            }
+
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                Log.d("SeekBar", "User stopped tracking seek bar");
+                handler.post(updateSeekBarRunnable); // Resume automatic updates
+            }
         });
     }
 
@@ -277,8 +289,15 @@ public class PlayerActivity extends AppCompatActivity
                             duration_played.setText(formattedTime(currentPosition));
                             duration_total.setText(formattedTime(duration));
                         }
+
+                        // Track end detection
+                        if (currentPosition >= duration - 1) {
+                            Log.d("PlayerActivity", "Track end detected, transitioning to next track");
+                            nextBtnClicked();
+                        }
                     }
-                    handler.postDelayed(updateSeekBarRunnable, 1000);
+                    handler.postDelayed(this, 1000); // Continue updates
+
                 });
             }
         }
@@ -303,14 +322,11 @@ public class PlayerActivity extends AppCompatActivity
 
 
     private void changeTrack(boolean isNext) {
-        if (isChangingTrack) return;
-        isChangingTrack = true;
         seekBar.setProgress(0);
         duration_played.setText(formattedTime(0));
 
-
         if (spotifyAppRemote != null) {
-
+            Log.d("MusicService", "Changing track, isNext: " + isNext);
             if (isNext) {
                 if (shuffleBoolean && !repeatBoolean) {
                     position = getRandom(listSongs.size() - 1);
@@ -323,12 +339,14 @@ public class PlayerActivity extends AppCompatActivity
 
             SpotifyTrack selectedTrack = listSongs.get(position);
             String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
+            sharedViewModel.setCurrentTrack(selectedTrack);
 
             SharedPreferences.Editor editor = getSharedPreferences(MainActivity.MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
             editor.putString(MainActivity.MUSIC_FILE, selectedTrack.getAlbumImageUrl());
             editor.putString(MainActivity.ARTIST_NAME, selectedTrack.getArtistName());
             editor.putString(MainActivity.SONG_NAME, selectedTrack.getTrackName());
             editor.apply();
+            updateUIWithCurrentTrack(selectedTrack);
 
             // Set the flag to show the mini-player
             MainActivity.SHOW_MINI_PLAYER = true;
@@ -337,8 +355,6 @@ public class PlayerActivity extends AppCompatActivity
                 handler.post(updateSeekBarRunnable); // Start updating seekbar
                 song_name.setText(selectedTrack.getTrackName());
                 artist_name.setText(selectedTrack.getArtistName());
-                updateUIWithCurrentTrack(selectedTrack);
-                isChangingTrack = false;
                 Glide.with(this)
                         .asBitmap()
                         .load(selectedTrack.getAlbumImageUrl())
@@ -364,15 +380,15 @@ public class PlayerActivity extends AppCompatActivity
 
 
     public void nextBtnClicked() {
-        if (shuffleBoolean) {
-            position = getRandom(listSongs.size() - 1);
-        } else {
-            position = (position + 1) % listSongs.size();
-        }
+        Log.d("MusicService", "Next button clicked, current position: " + position);
         changeTrack(true);
+        musicService.nextBtnClicked();
+        Log.d("MusicService", "UI update after next button, new position: " + position);
     }
 
     public void prevBtnClicked() {
+        musicService.previousBtnClicked();
+
         changeTrack(false);
     }
 
@@ -529,9 +545,13 @@ public class PlayerActivity extends AppCompatActivity
     }
 
     public void onServiceConnected(ComponentName componentName, IBinder service) {
+
         MusicService.MyBinder myBinder = (MusicService.MyBinder) service;
         musicService = myBinder.getService();
         musicService.setCallBack(this);
+
+        Log.d("MusicService", "SERVICEISCONNECTED");
+
 
         // Ensure we have a valid list of songs and position
         if (listSongs != null && !listSongs.isEmpty() && position >= 0 && position < listSongs.size()) {
@@ -548,15 +568,14 @@ public class PlayerActivity extends AppCompatActivity
                     int currentPosition = (int) (playerState.playbackPosition / 1000);
                     int duration = (int) (playerState.track.duration / 1000);
 
-                    // Check if the track is at its end
-                    if (currentPosition >= duration - 1) {
-                        nextBtnClicked(); // Move to the next track
-                    } else {
-                        seekBar.setMax(duration);
-                        seekBar.setProgress(currentPosition);
-                        duration_played.setText(formattedTime(currentPosition));
-                        duration_total.setText(formattedTime(duration));
-                    }
+                    Log.d("MusicService", "SERVICE CURRENT POSITION " + currentPosition);
+                    Log.d("MusicService", "TRACK DURATION " + duration);
+
+                    seekBar.setMax(duration);
+                    seekBar.setProgress(currentPosition);
+                    duration_played.setText(formattedTime(currentPosition));
+                    duration_total.setText(formattedTime(duration));
+
                 }
             });
         } else {
@@ -567,6 +586,7 @@ public class PlayerActivity extends AppCompatActivity
 
     // Helper method to update the UI with the current track's metadata
     private void updateUIWithCurrentTrack(SpotifyTrack currentTrack) {
+        Log.d("MusicService", "Updating UI with track: " + currentTrack.getTrackName());
         song_name.setText(currentTrack.getTrackName());
         artist_name.setText(currentTrack.getArtistName());
         metaData(); // Load cover art and other track-specific info

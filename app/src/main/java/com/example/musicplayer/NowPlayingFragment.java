@@ -35,8 +35,12 @@ import android.widget.TextView;
 import com.bumptech.glide.Glide;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import java.util.ArrayList;
 
-public class NowPlayingFragment extends Fragment implements ServiceConnection{
+
+public class NowPlayingFragment extends Fragment implements ServiceConnection {
+
+    private static final String TAG = "NowPlayingFragment";
 
     ImageView nextBtn, albumArt;
     TextView artist, songName;
@@ -47,20 +51,20 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection{
     public static final String MUSIC_FILE = "STORED_MUSIC";
     public static final String ARTIST_NAME = "ARTIST_NAME";
     public static final String SONG_NAME = "SONG_NAME";
-    public NowPlayingFragment(){
 
-    }
+    public NowPlayingFragment() {}
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
+        Log.d(TAG, "onCreateView: Inflating layout for NowPlayingFragment");
         view = inflater.inflate(R.layout.fragment_now_playing, container, false);
+
         artist = view.findViewById(R.id.song_artist_miniPlayer);
         songName = view.findViewById(R.id.song_name_miniPlayer);
         albumArt = view.findViewById(R.id.bottom_album_art);
         nextBtn = view.findViewById(R.id.skip_next_button);
-        playPauseBtn  = view.findViewById(R.id.play_miniPlayer);
+        playPauseBtn = view.findViewById(R.id.play_miniPlayer);
         playPauseBtn.setImageResource(R.drawable.ic_pause);
 
         setDefaultUI();
@@ -68,61 +72,34 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection{
         nextBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if(musicService != null){
+                Log.d(TAG, "Next button clicked");
+                if (musicService != null) {
+                    Log.d(TAG, "MusicService is not null, invoking nextBtnClicked");
                     musicService.nextBtnClicked();
-                    if(getActivity() != null) {
-                        SharedPreferences.Editor editor = getActivity().getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE)
-                                .edit();
-                        editor.putString(MUSIC_FILE, musicFiles
-                                .get(position).getAlbumImageUrl());
-                        editor.putString(ARTIST_NAME, musicFiles
-                                .get(position).getArtistName());
-                        editor.putString(SONG_NAME, musicFiles
-                                .get(position).getTrackName());
-                        editor.apply();
-                        SharedPreferences preferences = getActivity()
-                                .getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE);
-                        String path = preferences.getString(MUSIC_FILE, null);
-                        String artistName = preferences.getString(ARTIST_NAME, null);
-                        String song = preferences.getString(SONG_NAME, null);
-
-                        if(path != null){
-                            SHOW_MINI_PLAYER = true;
-                            PATH_TO_FRAG = path;
-                            ARTIST_TO_FRAG = artistName;
-                            SONG_TO_FRAG = song;
-
-                        } else {
-                            SHOW_MINI_PLAYER = false;
-                            PATH_TO_FRAG = null;
-                            ARTIST_TO_FRAG = null;
-                            SONG_TO_FRAG = null;
-                        }
-                        if(SHOW_MINI_PLAYER){
-                            if(PATH_TO_FRAG != null){
-                                displayAlbumArt();
-                                songName.setText(SONG_TO_FRAG);
-                                artist.setText(ARTIST_TO_FRAG);
-                            }
-                        }
+                    if (getActivity() != null) {
+                        updateSharedPreferences();
+                        updateUI();
+                    } else {
+                        Log.e(TAG, "Activity is null");
                     }
+                } else {
+                    Log.e(TAG, "MusicService is null");
                 }
             }
         });
+
         playPauseBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                Log.d(TAG, "PlayPause button clicked");
                 if (musicService != null) {
                     musicService.playPauseButtonClicked();
-
-                    // Use the callback to check the playing status and update the UI accordingly
                     musicService.isPlaying(isPlaying -> {
-                        if (isPlaying) {
-                            playPauseBtn.setImageResource(R.drawable.ic_pause);
-                        } else {
-                            playPauseBtn.setImageResource(R.drawable.ic_play);
-                        }
+                        Log.d(TAG, "Is playing: " + isPlaying);
+                        playPauseBtn.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
                     });
+                } else {
+                    Log.e(TAG, "MusicService is null");
                 }
             }
         });
@@ -130,43 +107,53 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection{
     }
 
     private void setDefaultUI() {
-        // Set default text and placeholder image
+        Log.d(TAG, "Setting default UI");
         songName.setText(R.string.default_song_name);
         artist.setText(R.string.default_artist_name);
         playPauseBtn.setImageResource(R.drawable.ic_pause);
     }
 
-
     @Override
     public void onResume() {
         super.onResume();
-        if (SHOW_MINI_PLAYER && PATH_TO_FRAG != null) {
-            displayAlbumArt();
-            songName.setText(SONG_TO_FRAG);
-            artist.setText(ARTIST_TO_FRAG);
-        } else {
-            setDefaultUI();
-        }
-
+        Log.d(TAG, "onResume: Binding service and registering receiver");
         Intent intent = new Intent(getContext(), MusicService.class);
         if (getContext() != null) {
             getContext().bindService(intent, this, Context.BIND_AUTO_CREATE);
+        }
+
+        LocalBroadcastManager.getInstance(requireContext()).registerReceiver(trackChangeReceiver,
+                new IntentFilter("TRACK_CHANGED"));
+
+        if (SHOW_MINI_PLAYER && PATH_TO_FRAG != null) {
+            updateUI();
+        } else {
+            setDefaultUI();
         }
     }
 
     @Override
     public void onPause() {
         super.onPause();
+        Log.d(TAG, "onPause: Unbinding service and unregistering receiver");
         if (getContext() != null) {
             getContext().unbindService(this);
         }
+        LocalBroadcastManager.getInstance(requireContext()).unregisterReceiver(trackChangeReceiver);
     }
 
-
+    private final BroadcastReceiver trackChangeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.d(TAG, "Track change received, updating UI");
+            updateUI();
+        }
+    };
 
     private void displayAlbumArt() {
         if (musicService != null && musicFiles != null && position >= 0 && position < musicFiles.size()) {
             String albumImageUrl = musicFiles.get(position).getAlbumImageUrl();
+            Log.d(TAG, "Displaying album art: " + albumImageUrl);
             if (albumImageUrl != null) {
                 Glide.with(this)
                         .load(albumImageUrl)
@@ -176,34 +163,58 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection{
                 albumArt.setImageResource(R.drawable.gradient_bg);
             }
         } else {
-            Log.e("NowPlayingFragment", "Invalid position or musicFiles is null in displayAlbumArt.");
+            Log.e(TAG, "Invalid position or musicFiles is null in displayAlbumArt");
         }
     }
 
     private void updateUI() {
-        if (musicService != null && musicFiles != null && position >= 0 && position < musicFiles.size()) {
-            SpotifyTrack currentTrack = musicFiles.get(position);
-            songName.setText(currentTrack.getTrackName());
-            artist.setText(currentTrack.getArtistName());
-            displayAlbumArt();
-        } else {
-            Log.e("NowPlayingFragment", "Invalid position or musicFiles is null.");
-            setDefaultUI();
-        }
+        if (musicService != null) {
+            int currentPosition = position;
+            ArrayList<SpotifyTrack> currentMusicFiles = musicFiles;
 
+            if (currentMusicFiles != null && currentPosition >= 0 && currentPosition < currentMusicFiles.size()) {
+                SpotifyTrack currentTrack = currentMusicFiles.get(currentPosition);
+                Log.d("NowPlayingFragment", "Updating UI with track: " + currentTrack.getTrackName());
+                songName.setText(currentTrack.getTrackName());
+                artist.setText(currentTrack.getArtistName());
+                displayAlbumArt();
+            } else {
+                Log.e("NowPlayingFragment", "Invalid position or musicFiles is null in updateUI");
+                setDefaultUI();
+            }
+        } else {
+            Log.e("NowPlayingFragment", "MusicService is null in updateUI");
+        }
+    }
+
+    private void updateSharedPreferences() {
+        Log.d(TAG, "Updating SharedPreferences with current track info");
+        SharedPreferences.Editor editor = getActivity().getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
+        editor.putString(MUSIC_FILE, musicFiles.get(position).getAlbumImageUrl());
+        editor.putString(ARTIST_NAME, musicFiles.get(position).getArtistName());
+        editor.putString(SONG_NAME, musicFiles.get(position).getTrackName());
+        editor.apply();
     }
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder service) {
+        Log.d(TAG, "Service connected");
         MusicService.MyBinder binder = (MusicService.MyBinder) service;
         musicService = binder.getService();
+
+        // Check musicFiles after service is connected
+        if (musicService != null) {
+            Log.d(TAG, "Checking musicFiles and position after service connected.");
+            Log.d(TAG, "musicFiles size: " + (musicFiles != null ? musicFiles.size() : "null"));
+            Log.d(TAG, "Current position: " + position);
+        }
+
         updateUI();
     }
 
     @Override
     public void onServiceDisconnected(ComponentName componentName) {
-
+        Log.d(TAG, "Service disconnected");
+        musicService = null;
     }
-
-
 }

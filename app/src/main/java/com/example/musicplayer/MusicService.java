@@ -123,7 +123,6 @@ public class MusicService extends Service {
                         break;
                 }
             }
-            broadcastTrackChange();
         } else {
             Log.w(TAG, "Received null intent in onStartCommand");
         }
@@ -151,16 +150,6 @@ public class MusicService extends Service {
                 });
     }
 
-    private void broadcastTrackChange() {
-        Intent intent = new Intent("com.example.musicplayer.TRACK_CHANGED");
-        intent.putExtra("TRACK_POSITION", position);
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-    }
-
-    private String getAccessToken() {
-        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
-        return sharedPreferences.getString("access_token", null);
-    }
 
     public void subscribeToPlayerStateUpdates(Consumer<PlayerState> callback) {
         if (spotifyAppRemote != null && playerStateSubscription == null) {
@@ -196,46 +185,10 @@ public class MusicService extends Service {
         if (listSongs != null && startPosition >= 0 && startPosition < listSongs.size()) {
             musicFiles = listSongs;
             position = startPosition;
-
-            SpotifyTrack selectedTrack = musicFiles.get(position);
-            String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
-
-            if (spotifyAppRemote != null) {
-                spotifyAppRemote.getPlayerApi().play(spotifyUri)
-                        .setResultCallback(empty -> Log.d(TAG, "Playing track: " + selectedTrack.getTrackName()))
-                        .setErrorCallback(error -> Log.e(TAG, "Error playing track", error));
-            } else {
-                Log.e(TAG, "SpotifyAppRemote not connected, cannot play track.");
-            }
         } else {
             Log.e(TAG, "Invalid position or empty playlist.");
         }
-    }
 
-    private void saveLastPlayed(String trackUri) {
-        SharedPreferences.Editor editor = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
-        editor.putString(MUSIC_FILE, trackUri);
-        editor.putString(ARTIST_NAME, musicFiles.get(position).getArtistName());
-        editor.putString(SONG_NAME, musicFiles.get(position).getTrackName());
-        editor.apply();
-    }
-
-    void start() {
-        if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().resume();
-        }
-    }
-
-    void pause() {
-        if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().pause();
-        }
-    }
-
-    void stop() {
-        if (spotifyAppRemote != null) {
-            spotifyAppRemote.getPlayerApi().pause();
-        }
     }
 
     void isPlaying(Callback<Boolean> callback) {
@@ -276,11 +229,10 @@ public class MusicService extends Service {
         SpotifyTrack currentTrack = musicFiles.get(position);
         String imageUrl = currentTrack.getAlbumImageUrl();
 
-        Bitmap defaultImage = BitmapFactory.decodeResource(getResources(), R.drawable.gradient_bg);
-
-        // Load the image on a background thread
+        // Load image asynchronously
         new Thread(() -> {
-            Bitmap thumb = defaultImage; // Use the default image initially
+            Bitmap thumb = BitmapFactory.decodeResource(getResources(), R.drawable.gradient_bg); // Default image
+
             try {
                 if (imageUrl != null && !imageUrl.isEmpty()) {
                     thumb = Glide.with(this)
@@ -290,10 +242,10 @@ public class MusicService extends Service {
                             .get();
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Error loading album image for notification", e);
+                Log.e("MusicService", "Error loading album image for notification", e);
             }
 
-            // Create and show the notification on the main thread
+            // Build and show the notification on the main thread
             Bitmap finalThumb = thumb;
             new Handler(Looper.getMainLooper()).post(() -> {
                 Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID_2)
@@ -304,24 +256,30 @@ public class MusicService extends Service {
                         .addAction(R.drawable.ic_skip_previous, "Previous", prevPending)
                         .addAction(playPauseBtn, "Pause/Play", pausePending)
                         .addAction(R.drawable.ic_skip_next, "Next", nextPending)
+                        .setStyle(new androidx.media.app.NotificationCompat.MediaStyle())
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setOnlyAlertOnce(true)
                         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                        .setStyle(new NotificationCompat.BigPictureStyle()
-                                .bigPicture(finalThumb))
                         .setContentIntent(contentIntent)
                         .build();
 
-                startForeground(2, notification);
+                startForeground(5, notification);
             });
         }).start();
     }
 
     void nextBtnClicked() {
-        if (actionPlaying != null) {
-            actionPlaying.nextBtnClicked();
+        if (musicFiles != null && !musicFiles.isEmpty()) {
+            if (shuffleBoolean) {
+                position = new Random().nextInt(musicFiles.size());
+            } else {
+                position = (position + 1) % musicFiles.size(); // Loop back to start
+            }
+
+            playMedia(position); // Ensure the media is played from the new position
+        } else {
+            Log.e(TAG, "nextBtnClicked: musicFiles is empty or null");
         }
-        broadcastTrackChange();
     }
 
     void playPauseButtonClicked() {
@@ -331,10 +289,17 @@ public class MusicService extends Service {
     }
 
     void previousBtnClicked() {
-        if (actionPlaying != null) {
-            actionPlaying.prevBtnClicked();
+        if (musicFiles != null && !musicFiles.isEmpty()) {
+            if (shuffleBoolean) {
+                position = new Random().nextInt(musicFiles.size());
+            } else {
+                position = (position - 1 < 0) ? (musicFiles.size() - 1) : (position - 1); // Loop back to end
+            }
+
+            playMedia(position); // Ensure the media is played from the new position
+        } else {
+            Log.e(TAG, "previousBtnClicked: musicFiles is empty or null");
         }
-        broadcastTrackChange();
     }
 
     @Override
