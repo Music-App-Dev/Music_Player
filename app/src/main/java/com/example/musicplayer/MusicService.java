@@ -151,6 +151,35 @@ public class MusicService extends Service {
     }
 
 
+    public void seekTo(int positionInMillis) {
+        if (spotifyAppRemote != null) {
+            spotifyAppRemote.getPlayerApi().getPlayerState().setResultCallback(playerState -> {
+                if (playerState != null && playerState.track != null) {
+                    if (!playerState.track.isPodcast && !playerState.track.isEpisode) {
+                        spotifyAppRemote.getPlayerApi().seekTo(positionInMillis)
+                                .setResultCallback(empty -> Log.d(TAG, "Seeked to position: " + positionInMillis))
+                                .setErrorCallback(error -> {
+                                    Log.e(TAG, "Error seeking to position", error);
+                                });
+                    } else {
+                        Log.w(TAG, "Cannot seek in this track type.");
+                    }
+                } else {
+                    Log.w(TAG, "PlayerState or Track is null. Retrying seek...");
+                }
+            }).setErrorCallback(error -> Log.e(TAG, "Error fetching player state", error));
+        } else {
+            Log.w(TAG, "SpotifyAppRemote is null. Falling back to Web API.");
+        }
+    }
+
+
+
+    private String getAccessToken() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        return sharedPreferences.getString("access_token", null);
+    }
+
     public void subscribeToPlayerStateUpdates(Consumer<PlayerState> callback) {
         if (spotifyAppRemote != null && playerStateSubscription == null) {
             playerStateSubscription = (Subscription<PlayerState>) spotifyAppRemote.getPlayerApi().subscribeToPlayerState()
@@ -185,10 +214,22 @@ public class MusicService extends Service {
         if (listSongs != null && startPosition >= 0 && startPosition < listSongs.size()) {
             musicFiles = listSongs;
             position = startPosition;
+
+            SpotifyTrack selectedTrack = musicFiles.get(position);
+            Log.d(TAG, "playMedia: Playing track at position: " + position + ", Track: " + selectedTrack.getTrackName());
+
         } else {
             Log.e(TAG, "Invalid position or empty playlist.");
         }
 
+    }
+
+    private void saveLastPlayed(String trackUri) {
+        SharedPreferences.Editor editor = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
+        editor.putString(MUSIC_FILE, trackUri);
+        editor.putString(ARTIST_NAME, musicFiles.get(position).getArtistName());
+        editor.putString(SONG_NAME, musicFiles.get(position).getTrackName());
+        editor.apply();
     }
 
     void isPlaying(Callback<Boolean> callback) {
@@ -270,13 +311,7 @@ public class MusicService extends Service {
 
     void nextBtnClicked() {
         if (musicFiles != null && !musicFiles.isEmpty()) {
-            if (shuffleBoolean) {
-                position = new Random().nextInt(musicFiles.size());
-            } else {
-                position = (position + 1) % musicFiles.size(); // Loop back to start
-            }
-
-            playMedia(position); // Ensure the media is played from the new position
+            playMedia(PlayerActivity.position); // Ensure the media is played from the new position
         } else {
             Log.e(TAG, "nextBtnClicked: musicFiles is empty or null");
         }

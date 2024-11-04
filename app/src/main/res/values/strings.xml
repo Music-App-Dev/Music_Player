@@ -3,4 +3,6 @@
     <!-- TODO: Remove or change this placeholder text -->
     <string name="default_song_name">No song playing</string>
     <string name="default_artist_name">Unknown Artist</string>
+    <string name="artist_name">Artist Name</string>
+    <string name="file_name">File Name</string>
 </resources>

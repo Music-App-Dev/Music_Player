@@ -47,6 +47,7 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
     public void onBindViewHolder(@NonNull MyViewHolder holder, int position) {
         SpotifyTrack track = mFiles.get(position);
         holder.file_name.setText(track.getTrackName());
+        holder.artist_name.setText(track.getArtistName());
         Glide.with(mContext).load(track.getAlbumImageUrl()).into(holder.album_art);
 
         holder.itemView.setOnClickListener(v -> {
@@ -75,12 +76,13 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
     }
 
     public class MyViewHolder extends RecyclerView.ViewHolder {
-        TextView file_name;
+        TextView file_name, artist_name;
         ImageView album_art, menuMore;
 
         public MyViewHolder(@NonNull View itemView) {
             super(itemView);
             file_name = itemView.findViewById(R.id.music_file_name);
+            artist_name = itemView.findViewById(R.id.artist_name);
             album_art = itemView.findViewById(R.id.music_img);
             menuMore = itemView.findViewById(R.id.menuMore);
         }

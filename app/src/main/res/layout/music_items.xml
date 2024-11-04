@@ -8,21 +8,40 @@
     android:id="@+id/audio_item">
 
     <ImageView
-        android:layout_width="60dp"
-        android:layout_height="60dp"
+        android:layout_width="65dp"
+        android:layout_height="65dp"
         android:id="@+id/music_img"
         android:src="@drawable/ic_launcher_background"
         android:padding="5dp"/>
-    <TextView
+
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="File Name"
+        android:orientation="vertical"
         android:layout_toEndOf="@id/music_img"
         android:layout_marginStart="10dp"
         android:layout_centerVertical="true"
-        android:textColor="@color/colorAccent"
-        android:layout_toStartOf="@id/menuMore"
-        android:id="@+id/music_file_name" />
+        android:layout_toStartOf="@id/menuMore">
+
+        <!-- Music File Name -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/file_name"
+            android:textColor="@color/colorAccent"
+            android:id="@+id/music_file_name" />
+
+        <!-- Artist Name -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/artist_name"
+            android:textColor="@color/gray"
+            android:paddingTop="5dp"
+            android:textSize="11sp"
+            android:id="@+id/artist_name" />
+
+    </LinearLayout>
 
     <ImageView
         android:layout_width="60dp"

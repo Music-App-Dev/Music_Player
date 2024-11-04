@@ -69,6 +69,8 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
 
         setDefaultUI();
 
+        view.setOnClickListener(v -> openPlayerActivity());
+
         nextBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -104,6 +106,17 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
             }
         });
         return view;
+    }
+
+    private void openPlayerActivity() {
+        if (musicFiles != null && position >= 0 && position < musicFiles.size()) {
+            Intent intent = new Intent(getActivity(), PlayerActivity.class);
+            intent.putParcelableArrayListExtra("trackList", new ArrayList<>(musicFiles)); // Pass the track list
+            intent.putExtra("position", position); // Pass the current position
+            startActivity(intent);
+        } else {
+            Log.e(TAG, "Cannot open PlayerActivity: invalid position or musicFiles is null");
+        }
     }
 
     private void setDefaultUI() {

@@ -90,6 +90,8 @@ public class PlayerActivity extends AppCompatActivity
         getIntentMethod();
         setupListeners();
 
+        loadSavedStates();
+
         sharedViewModel = new ViewModelProvider(this).get(SharedViewModel.class);
 
         // Retrieve the access token from SharedPreferences or initiate authorization
@@ -131,6 +133,29 @@ public class PlayerActivity extends AppCompatActivity
         }
     }
 
+
+    private void loadSavedStates() {
+        SharedPreferences preferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
+        shuffleBoolean = preferences.getBoolean("shuffleBoolean", false);
+        repeatBoolean = preferences.getBoolean("repeatBoolean", false);
+
+        shuffleBtn.setImageResource(shuffleBoolean ? R.drawable.ic_shuffle_on : R.drawable.ic_shuffle_off);
+        repeatBtn.setImageResource(repeatBoolean ? R.drawable.ic_repeat_on : R.drawable.ic_repeat_off);
+    }
+
+    private void saveShuffleState(boolean state) {
+        SharedPreferences preferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putBoolean("shuffleBoolean", state);
+        editor.apply();
+    }
+
+    private void saveRepeatState(boolean state) {
+        SharedPreferences preferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putBoolean("repeatBoolean", state);
+        editor.apply();
+    }
 
 
     private String getAccessToken() {
@@ -238,11 +263,13 @@ public class PlayerActivity extends AppCompatActivity
         shuffleBtn.setOnClickListener(v -> {
             shuffleBoolean = !shuffleBoolean;
             shuffleBtn.setImageResource(shuffleBoolean ? R.drawable.ic_shuffle_on : R.drawable.ic_shuffle_off);
+            saveShuffleState(shuffleBoolean);
         });
 
         repeatBtn.setOnClickListener(v -> {
             repeatBoolean = !repeatBoolean;
             repeatBtn.setImageResource(repeatBoolean ? R.drawable.ic_repeat_on : R.drawable.ic_repeat_off);
+            saveRepeatState(repeatBoolean);
         });
 
         backBtn.setOnClickListener(v -> finish());
@@ -327,14 +354,22 @@ public class PlayerActivity extends AppCompatActivity
 
         if (spotifyAppRemote != null) {
             Log.d("MusicService", "Changing track, isNext: " + isNext);
-            if (isNext) {
-                if (shuffleBoolean && !repeatBoolean) {
-                    position = getRandom(listSongs.size() - 1);
-                } else {
-                    position = (position + 1) % listSongs.size();
-                }
+            // Handle repeat mode
+            if (repeatBoolean) {
+                Log.d("MusicService", "Repeat mode enabled, replaying the current track at position: " + position);
+                // Keep the current position for repeat mode
+            } else if (shuffleBoolean) {
+                // Shuffle mode logic
+                position = getRandom(listSongs.size() - 1);
+                Log.d("MusicService", "Shuffle mode enabled, playing random track at position: " + position);
             } else {
-                position = (position - 1 < 0) ? listSongs.size() - 1 : position - 1;
+                // Normal next/previous track logic
+                if (isNext) {
+                    position = (position + 1) % listSongs.size();
+                } else {
+                    position = (position - 1 < 0) ? listSongs.size() - 1 : position - 1;
+                }
+                Log.d("MusicService", "Playing next/previous track at position: " + position);
             }
 
             SpotifyTrack selectedTrack = listSongs.get(position);
@@ -416,6 +451,19 @@ public class PlayerActivity extends AppCompatActivity
             song_name.setText(selectedTrack.getTrackName());
             artist_name.setText(selectedTrack.getArtistName());
             Glide.with(this).load(selectedTrack.getAlbumImageUrl()).into(cover_art);
+
+            // Retrieve saved playback position and track ID
+            SharedPreferences preferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
+            String savedTrackId = preferences.getString("currentTrackId", null);
+            int savedPosition = preferences.getInt("savedPosition", 0);
+
+            // Check if the current track matches the saved track ID
+            if (savedTrackId != null && savedTrackId.equals("spotify:track:" + selectedTrack.getTrackId())) {
+                Log.d("PlayerActivity", "Resuming playback at position: " + savedPosition);
+                spotifyAppRemote.getPlayerApi().seekTo(savedPosition).setResultCallback(empty -> {
+                    Log.d("PlayerActivity", "Seeked to saved position: " + savedPosition);
+                }).setErrorCallback(error -> Log.e("PlayerActivity", "Error seeking to saved position: " + error.getMessage()));
+            }
 
             playPauseBtn.setImageResource(R.drawable.ic_pause);
         } else {
