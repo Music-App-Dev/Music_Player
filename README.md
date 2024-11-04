@@ -120,5 +120,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgements
 
 - [Android Developers Documentation](https://developer.android.com/docs)
-- Spotify for [API Documentations]([https://material.io/resources/icons/](https://developer.spotify.com/documentation/web-api))
+- Spotify for [API Documentations](https://developer.spotify.com/documentation/web-api)
 - Alex
