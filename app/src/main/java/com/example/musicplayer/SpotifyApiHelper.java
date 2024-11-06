@@ -4,6 +4,7 @@ import static android.content.Context.MODE_PRIVATE;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -36,7 +37,7 @@ public class SpotifyApiHelper {
     }
 
     public interface SpotifyPlaylistsCallback {
-        void onPlaylistFetched(ArrayList<SpotifyPlaylist> playlists); // For fetching playlists
+        void onPlaylistFetched(ArrayList<SpotifyItem> playlists); // For fetching playlists
         void onTrackAddedToPlaylist(); // For confirming a track was added
         void onFailure(Exception e); // For handling failures
     }
@@ -202,6 +203,57 @@ public class SpotifyApiHelper {
         });
     }
 
+    public interface SpotifySearchCallback {
+        void onSearchSuccess(ArrayList<SpotifyTrack> tracks);
+        void onSearchFailure(Exception e);
+    }
+
+    public static void searchTracks(Context context, String query, SpotifySearchCallback callback) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        if (accessToken == null) {
+            callback.onSearchFailure(new Exception("Access token is null or invalid"));
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/search?q=" + Uri.encode(query) + "&type=track")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                callback.onSearchFailure(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    try {
+                        String responseData = response.body().string();
+                        JSONObject jsonObject = new JSONObject(responseData);
+                        JSONArray itemsArray = jsonObject.getJSONObject("tracks").getJSONArray("items");
+
+                        ArrayList<SpotifyTrack> tracks = new ArrayList<>();
+                        for (int i = 0; i < itemsArray.length(); i++) {
+                            JSONObject trackObject = itemsArray.getJSONObject(i);
+                            SpotifyTrack track = parseTrackFromJson(trackObject);
+                            tracks.add(track);
+                        }
+                        callback.onSearchSuccess(tracks);
+                    } catch (JSONException e) {
+                        callback.onSearchFailure(e);
+                    }
+                } else {
+                    callback.onSearchFailure(new Exception("Failed with response code: " + response.code()));
+                }
+            }
+        });
+    }
+
 
     private static ArrayList<SpotifyTrack> parsePlaylistTracks(String jsonData) {
         ArrayList<SpotifyTrack> tracks = new ArrayList<>();
@@ -299,6 +351,53 @@ public class SpotifyApiHelper {
         });
     }
 
+    public static void addTrackToPlaylist(Context context, String playlistId, String trackUri, SpotifyPlaylistsCallback callback) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        if (accessToken == null) {
+            callback.onFailure(new Exception("Access token is null. Please authenticate."));
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient();
+
+        JSONObject postBody = new JSONObject();
+        try {
+            JSONArray uris = new JSONArray();
+            uris.put(trackUri);
+            postBody.put("uris", uris);
+        } catch (Exception e) {
+            callback.onFailure(e);
+            return;
+        }
+
+        RequestBody body = RequestBody.create(postBody.toString(), MediaType.parse("application/json"));
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/playlists/" + playlistId + "/tracks")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .post(body)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                callback.onFailure(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    callback.onTrackAddedToPlaylist(); // Notify success
+                } else {
+                    String errorBody = response.body() != null ? response.body().string() : "Unknown error";
+                    callback.onFailure(new Exception("Failed with response code: " + response.code() + ", Error: " + errorBody));
+                }
+            }
+        });
+    }
+
+
     public static void fetchUserPlaylists(Context context, SpotifyPlaylistsCallback callback) {
         SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
         String accessToken = sharedPreferences.getString("access_token", null);
@@ -324,7 +423,7 @@ public class SpotifyApiHelper {
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (response.isSuccessful()) {
                     String responseData = response.body().string();
-                    ArrayList<SpotifyPlaylist> playlists = parseUserPlaylists(responseData);
+                    ArrayList<SpotifyItem> playlists = parseUserPlaylists(responseData);
                     callback.onPlaylistFetched(playlists);
                 } else {
                     callback.onFailure(new Exception("Failed with response code: " + response.code()));
@@ -333,8 +432,8 @@ public class SpotifyApiHelper {
         });
     }
 
-    private static ArrayList<SpotifyPlaylist> parseUserPlaylists(String jsonData) {
-        ArrayList<SpotifyPlaylist> playlists = new ArrayList<>();
+    private static ArrayList<SpotifyItem> parseUserPlaylists(String jsonData) {
+        ArrayList<SpotifyItem> playlists = new ArrayList<>();
         try {
             JSONObject jsonObject = new JSONObject(jsonData);
             JSONArray itemsArray = jsonObject.getJSONArray("items");
@@ -350,14 +449,27 @@ public class SpotifyApiHelper {
                     playlistImageUrl = imagesArray.getJSONObject(0).getString("url");
                 }
 
-                SpotifyPlaylist playlist = new SpotifyPlaylist(playlistName, playlistImageUrl, playlistId);
-                playlists.add(playlist);
+                // Create SpotifyItem with "playlist" type
+                SpotifyItem item = new SpotifyPlaylist(playlistName, playlistImageUrl, playlistId);
+                playlists.add(item);
             }
         } catch (Exception e) {
             Log.e("SpotifyApiHelper", "Error parsing playlist data", e);
         }
 
         return playlists;
+    }
+
+
+    private static SpotifyTrack parseTrackFromJson(JSONObject trackObject) throws JSONException {
+        String trackName = trackObject.getString("name");
+        String artistName = trackObject.getJSONArray("artists").getJSONObject(0).getString("name");
+        String trackId = trackObject.getString("id");
+        String duration = trackObject.getString("duration_ms");
+        String albumName = trackObject.getJSONObject("album").getString("name");
+        String albumImageUrl = trackObject.getJSONObject("album").getJSONArray("images").getJSONObject(0).getString("url");
+
+        return new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId);
     }
 
     private static ArrayList<SpotifyTrack> parseTracks(String jsonData, String albumName, String albumImageUrl) {

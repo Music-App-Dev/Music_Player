@@ -3,7 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".PlaylistFragment">
+    tools:context=".CombinedFragment">
+
 
     <androidx.recyclerview.widget.RecyclerView
         android:layout_width="match_parent"
@@ -11,5 +12,6 @@
         android:id="@+id/recyclerView"
         android:background="@color/colorPrimary"
         android:paddingBottom="80dp"/>
+
 
 </FrameLayout>

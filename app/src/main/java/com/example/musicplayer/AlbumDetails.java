@@ -2,6 +2,7 @@ package com.example.musicplayer;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -32,30 +33,34 @@ public class AlbumDetails extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_album_details);
 
-        recyclerView = findViewById(R.id.recylcerView);
+        displayPlaylistDetails();
+        fetchSpotifyAlbumDetails(albumId);
+    }
+
+    private void displayPlaylistDetails() {
+        recyclerView = findViewById(R.id.recyclerView);
         albumPhoto = findViewById(R.id.albumPhoto);
-        backBtn = findViewById(R.id.back_btn_album);
+        albumTopName = findViewById(R.id.albumTitle);
+        backBtn = findViewById(R.id.back_btn_album); // Ensure this matches your layout ID
 
-        albumName = getIntent().getStringExtra("albumName");
-        albumId = getIntent().getStringExtra("albumId");
-        albumImageUrl = getIntent().getStringExtra("albumImageUrl");
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        toolbar.setNavigationOnClickListener(v -> finish());
 
-        albumTopName = findViewById(R.id.album_details_album_name);
-        albumTopName.setText(albumName);
+        backBtn.setOnClickListener(v -> finish()); // Set listener here
 
         albumDetailsAdapter = new AlbumDetailsAdapter(this, albumSongs);
         recyclerView.setAdapter(albumDetailsAdapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // Fetch album details from Spotify API
-        fetchSpotifyAlbumDetails(albumId);
+        albumName = getIntent().getStringExtra("combinedName");
+        albumId = getIntent().getStringExtra("combinedId");
+        albumImageUrl = getIntent().getStringExtra("combinedImageUrl");
 
-        backBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                finish();  // This will close the activity and return to the previous screen
-            }
-        });
+        albumTopName.setText(albumName);
+        Glide.with(this).load(albumImageUrl).into(albumPhoto);
     }
 
     private void fetchSpotifyAlbumDetails(String albumId) {

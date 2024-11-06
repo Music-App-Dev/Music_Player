@@ -1,6 +1,6 @@
 package com.example.musicplayer;
 
-public class SpotifyAlbum {
+public class SpotifyAlbum extends SpotifyItem{
     private String albumName;
     private String artistName;
     private String imageUrl;
@@ -14,7 +14,14 @@ public class SpotifyAlbum {
         this.albumId = albumId;
     }
 
-    public String getAlbumId() {
+
+    @Override
+    public String getType() {
+        return "album";
+    }
+
+    @Override
+    public String getId() {
         return albumId;
     }
 
@@ -38,6 +45,12 @@ public class SpotifyAlbum {
         this.artistName = artistName;
     }
 
+    @Override
+    public String getName() {
+        return albumName;
+    }
+
+    @Override
     public String getImageUrl() {
         return imageUrl;
     }

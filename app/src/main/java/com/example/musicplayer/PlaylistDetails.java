@@ -1,8 +1,6 @@
 package com.example.musicplayer;
 
 
-import static com.example.musicplayer.MainActivity.albums;
-
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -10,6 +8,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -29,27 +28,36 @@ public class PlaylistDetails extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_playlist_details);
 
-        recyclerView = findViewById(R.id.recylcerView);
+        displayPlaylistDetails();
+        fetchSpotifyPlaylistDetails(playlistId);
+    }
+
+    private void displayPlaylistDetails() {
+        recyclerView = findViewById(R.id.recyclerView);
         playlistPhoto = findViewById(R.id.playlistPhoto);
-        backBtn = findViewById(R.id.back_btn_playlist);
+        playlistTopName = findViewById(R.id.playlistTitle);
+        backBtn = findViewById(R.id.back_btn_playlist); // Ensure this matches your layout ID
 
-        playlistName = getIntent().getStringExtra("playlistName");
-        playlistId = getIntent().getStringExtra("playlistId");
-        playlistImageUrl = getIntent().getStringExtra("playlistImageUrl");
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        toolbar.setNavigationOnClickListener(v -> finish());
 
-        playlistTopName = findViewById(R.id.playlist_details_playlist_name);
-        playlistTopName.setText(playlistName);
+        backBtn.setOnClickListener(v -> finish()); // Set listener here
 
         playlistDetailsAdapter = new PlaylistDetailsAdapter(this, playlistSongs);
         recyclerView.setAdapter(playlistDetailsAdapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        fetchSpotifyPlaylistDetails(playlistId);
+        playlistName = getIntent().getStringExtra("combinedName");
+        playlistId = getIntent().getStringExtra("combinedId");
+        playlistImageUrl = getIntent().getStringExtra("combinedImageUrl");
 
-        backBtn.setOnClickListener(v -> finish());
+        playlistTopName.setText(playlistName);
+        Glide.with(this).load(playlistImageUrl).into(playlistPhoto);
     }
 
     private void fetchSpotifyPlaylistDetails(String playlistId) {
