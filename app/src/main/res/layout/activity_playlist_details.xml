@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -7,63 +7,69 @@
     android:background="@color/colorPrimary"
     tools:context=".PlaylistDetails">
 
-    <RelativeLayout
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:id="@+id/layout_top_btn"
-        android:background="@drawable/gradient_bg"
-        android:layout_alignParentTop="true">
+        android:layout_height="wrap_content"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
-        <ImageView
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:id="@+id/back_btn_playlist"
-            android:src="@drawable/ic_chevron_left"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"/>
-        <TextView
+        <com.google.android.material.appbar.CollapsingToolbarLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:text="@string/playlist_name"
-            android:id="@+id/playlist_details_playlist_name"
-            android:textColor="@color/colorAccent"
-            android:layout_toEndOf="@id/back_btn_playlist"
-            android:layout_toStartOf="@id/menu_btn"
-            android:gravity="center_horizontal"
-            android:background="@android:color/transparent"
-            android:textSize="18sp"
-            android:textStyle="bold"/>
-        <ImageView
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:id="@+id/menu_btn"
-            android:src="@drawable/ic_menu"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"/>
-    </RelativeLayout>
-    <RelativeLayout
-        android:layout_width="wrap_content"
+            android:layout_height="600dp"
+            app:layout_scrollFlags="scroll|exitUntilCollapsed"
+            app:contentScrim="?attr/colorPrimary"
+            app:expandedTitleMarginEnd="64dp"
+            app:expandedTitleMarginStart="48dp">
+
+            <ImageView
+                android:id="@+id/playlistPhoto"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:src="@drawable/gradient_bg"
+                android:scaleType="centerCrop"
+                app:layout_collapseMode="parallax" />
+
+            <androidx.appcompat.widget.Toolbar
+                android:id="@+id/toolbar"
+                android:layout_width="match_parent"
+                android:layout_height="?attr/actionBarSize"
+                android:background="@drawable/gradient_bg"
+                app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
+                app:layout_collapseMode="pin">
+
+                <ImageView
+                    android:id="@+id/back_btn_playlist"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:src="@drawable/ic_chevron_left"
+                    android:layout_gravity="start|center_vertical"
+                    android:padding="16dp" />
+
+            </androidx.appcompat.widget.Toolbar>
+
+            <TextView
+                android:id="@+id/playlistTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center|bottom"
+                android:layout_marginBottom="16dp"
+                android:gravity="center"
+                android:text="@string/playlist_name"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:shadowColor="@android:color/black"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="3"
+                tools:text="Playlist Title" />
+
+
+        </com.google.android.material.appbar.CollapsingToolbarLayout>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/layout_top_btn">
-
-        <ImageView
-            android:layout_width="match_parent"
-            android:layout_height="350dp"
-            android:id="@+id/playlistPhoto"
-            android:src="@drawable/gradient_bg"
-            android:scaleType="centerCrop"/>
-        <ImageView
-            android:layout_width="match_parent"
-            android:layout_height="350dp"
-            android:id="@+id/gradient"
-            android:src="@drawable/gradient_bg"
-            android:scaleType="centerCrop"/>
-        <androidx.recyclerview.widget.RecyclerView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:id="@+id/recylcerView"
-            android:layout_below="@id/playlistPhoto"/>
-    </RelativeLayout>
-
-</RelativeLayout>
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

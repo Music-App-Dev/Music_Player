@@ -32,6 +32,9 @@
         <activity
             android:name=".PlayerActivity"
             android:exported="false" />
+
+        <activity android:name=".SearchActivity"
+            android:exported="false"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

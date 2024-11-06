@@ -55,14 +55,24 @@ import com.spotify.sdk.android.auth.AuthorizationClient;
 import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class PlayerActivity extends AppCompatActivity
         implements ActionPlaying, ServiceConnection {
 
     private TextView song_name, artist_name, duration_played, duration_total;
-    private ImageView cover_art, nextBtn, prevBtn, backBtn, shuffleBtn, repeatBtn;
+    private ImageView cover_art, nextBtn, prevBtn, backBtn, shuffleBtn, repeatBtn, addCircleIcon;
     private FloatingActionButton playPauseBtn;
     private SeekBar seekBar;
     public static int position = -1;
@@ -75,11 +85,12 @@ public class PlayerActivity extends AppCompatActivity
     private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
     private static final String REDIRECT_URI = "com.example.musicplayer://callback";
 
-    private boolean isChangingTrack = false;
+    private RefreshListener refreshListener;
 
     boolean isSpotifyConnecting = false;
 
-    private SharedViewModel sharedViewModel;
+    private static final String SPOTIFY_BASE_URL = "https://api.spotify.com/v1/me/tracks";
+    private OkHttpClient httpClient = new OkHttpClient();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,7 +103,6 @@ public class PlayerActivity extends AppCompatActivity
 
         loadSavedStates();
 
-        sharedViewModel = new ViewModelProvider(this).get(SharedViewModel.class);
 
         // Retrieve the access token from SharedPreferences or initiate authorization
         String accessToken = getAccessToken();
@@ -272,6 +282,8 @@ public class PlayerActivity extends AppCompatActivity
             saveRepeatState(repeatBoolean);
         });
 
+        addCircleIcon.setOnClickListener(v -> toggleLike());
+
         backBtn.setOnClickListener(v -> finish());
 
         playPauseBtn.setOnClickListener(v -> playPauseBtnClicked());
@@ -374,7 +386,6 @@ public class PlayerActivity extends AppCompatActivity
 
             SpotifyTrack selectedTrack = listSongs.get(position);
             String spotifyUri = "spotify:track:" + selectedTrack.getTrackId();
-            sharedViewModel.setCurrentTrack(selectedTrack);
             MusicService.playMedia(position, false);
             SharedPreferences.Editor editor = getSharedPreferences(MainActivity.MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
             editor.putString(MainActivity.MUSIC_FILE, selectedTrack.getAlbumImageUrl());
@@ -408,8 +419,6 @@ public class PlayerActivity extends AppCompatActivity
                 playPauseBtn.setImageResource(R.drawable.ic_pause);
                 musicService.showNotification(R.drawable.ic_pause);
             }).setErrorCallback(error -> Log.e("MusicService", "Error playing track: " + error.getMessage()));
-        } else {
-            isChangingTrack = false;
         }
     }
 
@@ -426,6 +435,10 @@ public class PlayerActivity extends AppCompatActivity
 
     private int getRandom(int i) {
         return new Random().nextInt(i + 1);
+    }
+
+    public void setRefreshListener(RefreshListener listener) {
+        this.refreshListener = listener;
     }
 
     private String formattedTime(int currentTime) {
@@ -448,6 +461,11 @@ public class PlayerActivity extends AppCompatActivity
             song_name.setText(selectedTrack.getTrackName());
             artist_name.setText(selectedTrack.getArtistName());
             Glide.with(this).load(selectedTrack.getAlbumImageUrl()).into(cover_art);
+
+            String trackId = listSongs.get(position).getTrackId();
+            checkIfTrackLiked(trackId, isLiked -> runOnUiThread(() -> {
+                addCircleIcon.setImageResource(isLiked ? R.drawable.ic_heart_filled : R.drawable.ic_add_circle);
+            }));
 
             // Retrieve saved playback position and track ID
             SharedPreferences preferences = getSharedPreferences("musicPlayerPrefs", MODE_PRIVATE);
@@ -488,6 +506,7 @@ public class PlayerActivity extends AppCompatActivity
         repeatBtn = findViewById(R.id.id_repeat);
         playPauseBtn = findViewById(R.id.play_pause);
         seekBar = findViewById(R.id.seekbar);
+        addCircleIcon = findViewById(R.id.add_circle);
     }
 
     private void metaData() {
@@ -519,6 +538,122 @@ public class PlayerActivity extends AppCompatActivity
             applyDefaultStyles();
         }
     }
+
+    // Toggle the liked state for the track
+    private void toggleLike() {
+        String trackId = listSongs.get(position).getTrackId();
+        checkIfTrackLiked(trackId, isLiked -> {
+            if (isLiked) {
+                removeTrackFromLiked(trackId);
+            } else {
+                addTrackToLiked(trackId);
+            }
+            if (refreshListener != null) {
+                refreshListener.onRefresh(); // Notify main activity/fragment to refresh
+            }
+        });
+    }
+
+    public interface Callback<T> {
+        void onResult(T result);
+    }
+
+    private void checkIfTrackLiked(String trackId, Callback<Boolean> callback) {
+        String url = SPOTIFY_BASE_URL + "/contains?ids=" + trackId;
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer " + getAccessToken())
+                .build();
+
+        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, IOException e) {
+                Log.e("SpotifyAPI", "Failed to check liked status", e);
+                callback.onResult(false);  // Default to not liked if the request fails
+            }
+
+            @Override
+            public void onResponse(okhttp3.Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    boolean isLiked = false;
+                    try {
+                        isLiked = new JSONArray(response.body().string()).getBoolean(0);
+                    } catch (JSONException e) {
+                        throw new RuntimeException(e);
+                    }
+                    callback.onResult(isLiked);
+                } else {
+                    Log.e("SpotifyAPI", "Error checking liked status: " + response.message());
+                    callback.onResult(false);  // Default to not liked if there's an error
+                }
+            }
+        });
+    }
+
+    // Add a track to liked tracks
+    private void addTrackToLiked(String trackId) {
+        String url = "https://api.spotify.com/v1/me/tracks";
+        String json = "{\"ids\": [\"" + trackId + "\"]}";
+        RequestBody body = RequestBody.create(json, okhttp3.MediaType.get("application/json"));
+
+        // Log to verify URL and JSON content
+        Log.d("SpotifyAPI", "Request URL: " + url);
+        Log.d("SpotifyAPI", "Request JSON: " + json);
+
+        Request request = new Request.Builder()
+                .url(url)
+                .put(body)
+                .addHeader("Authorization", "Bearer " + getAccessToken())
+                .build();
+
+        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, IOException e) {
+                Log.e("SpotifyAPI", "Failed to add track to liked", e);
+            }
+
+            @Override
+            public void onResponse(okhttp3.Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    Log.d("SpotifyAPI", "Track added to liked successfully");
+                    runOnUiThread(() -> addCircleIcon.setImageResource(R.drawable.ic_heart_filled));
+                } else {
+                    // Log detailed error message and status code
+                    Log.e("SpotifyAPI", "Error adding track to liked: " + response.message() + ", Code: " + response.code());
+                    Log.e("SpotifyAPI", "Response body: " + response.body().string());
+                }
+            }
+        });
+    }
+
+    // Remove a track from liked tracks
+    private void removeTrackFromLiked(String trackId) {
+        String url = SPOTIFY_BASE_URL + "?ids=" + trackId;
+        Request request = new Request.Builder()
+                .url(url)
+                .delete()
+                .addHeader("Authorization", "Bearer " + getAccessToken())
+                .build();
+
+        httpClient.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(okhttp3.Call call, IOException e) {
+                Log.e("SpotifyAPI", "Failed to remove track from liked", e);
+            }
+
+            @Override
+            public void onResponse(okhttp3.Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    Log.d("SpotifyAPI", "Track removed from liked successfully");
+                    runOnUiThread(() -> addCircleIcon.setImageResource(R.drawable.ic_add_circle));
+                } else {
+                    Log.e("SpotifyAPI", "Error removing track from liked: " + response.message());
+                }
+            }
+        });
+    }
+
+
 
     private void extractPalette(Bitmap bitmap) {
         Palette.from(bitmap).generate(palette -> {

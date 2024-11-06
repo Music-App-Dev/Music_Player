@@ -227,13 +227,7 @@ public class MusicService extends Service {
     }
 
 
-    private void saveLastPlayed(String trackUri) {
-        SharedPreferences.Editor editor = getSharedPreferences(MUSIC_FILE_LAST_PLAYED, MODE_PRIVATE).edit();
-        editor.putString(MUSIC_FILE, trackUri);
-        editor.putString(ARTIST_NAME, musicFiles.get(position).getArtistName());
-        editor.putString(SONG_NAME, musicFiles.get(position).getTrackName());
-        editor.apply();
-    }
+
 
     void isPlaying(Callback<Boolean> callback) {
         if (spotifyAppRemote != null) {

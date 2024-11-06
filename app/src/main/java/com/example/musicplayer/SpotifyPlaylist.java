@@ -1,40 +1,49 @@
 package com.example.musicplayer;
 
-public class SpotifyPlaylist {
-
-    private String albumName;
+public class SpotifyPlaylist extends SpotifyItem {
+    private String playlistName;
     private String imageUrl;
-
     private String playlistId;
 
-    public SpotifyPlaylist(String albumName, String imageUrl, String playlistId) {
-        this.albumName = albumName;
+    public SpotifyPlaylist(String playlistName, String imageUrl, String playlistId) {
+        this.playlistName = playlistName;
         this.imageUrl = imageUrl;
         this.playlistId = playlistId;
     }
 
-    public String getPlaylistId() {
-        return playlistId;
-    }
-
-    public void setPlaylistId(String albumId) {
-        this.playlistId = albumId;
-    }
-
     public String getPlaylistName() {
-        return albumName;
+        return playlistName;
     }
 
-    public void setPlaylistName(String albumName) {
-        this.albumName = albumName;
+    @Override
+    public String getType() {
+        return "playlist";
     }
 
-    public String getImageUrl() {
-        return imageUrl;
+    public void setPlaylistName(String playlistName) {
+        this.playlistName = playlistName;
     }
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
     }
 
+    @Override
+    public String getId() {
+        return playlistId;
+    }
+
+    public void setPlaylistId(String playlistId) {
+        this.playlistId = playlistId;
+    }
+
+    @Override
+    public String getName() {
+        return playlistName;
+    }
+
+    @Override
+    public String getImageUrl() {
+        return imageUrl;
+    }
 }

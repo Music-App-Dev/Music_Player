@@ -2,13 +2,17 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:title="search"
+        android:title="@string/search"
         android:id="@+id/search_option"
-        android:icon="@drawable/ic_menu_search"
-        app:showAsAction="ifRoom"
-        app:actionViewClass="androidx.appcompat.widget.SearchView"/>
+        android:icon="@drawable/ic_menu_search_white"
+        app:showAsAction="always"/>
     <item
-        android:title="Sort by"
+        android:title="@string/refresh"
+        android:id="@+id/refresh_option"
+        android:icon="@drawable/ic_refresh"
+        app:showAsAction="always"/>
+    <item
+        android:title="@string/sort_by"
         android:id="@+id/sort_options"
         app:showAsAction="never">
         <menu>
