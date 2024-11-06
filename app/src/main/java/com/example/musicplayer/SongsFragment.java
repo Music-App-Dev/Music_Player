@@ -57,7 +57,6 @@ public class SongsFragment extends Fragment {
     public MusicAdapter getAdapter() {
         return musicAdapter;
     }
-
     public void updateMusicList(ArrayList<SpotifyTrack> newTracks) {
         // Ensure recyclerView is not null before updating
         if (recyclerView != null && musicAdapter != null) {

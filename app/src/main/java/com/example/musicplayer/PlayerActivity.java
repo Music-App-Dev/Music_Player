@@ -85,6 +85,8 @@ public class PlayerActivity extends AppCompatActivity
     private static final String CLIENT_ID = "1e6a19b8b3364441b502d3c8c427ed6f";
     private static final String REDIRECT_URI = "com.example.musicplayer://callback";
 
+    private RefreshListener refreshListener;
+
     boolean isSpotifyConnecting = false;
 
     private static final String SPOTIFY_BASE_URL = "https://api.spotify.com/v1/me/tracks";
@@ -435,6 +437,10 @@ public class PlayerActivity extends AppCompatActivity
         return new Random().nextInt(i + 1);
     }
 
+    public void setRefreshListener(RefreshListener listener) {
+        this.refreshListener = listener;
+    }
+
     private String formattedTime(int currentTime) {
         String minutes = String.valueOf(currentTime / 60);
         String seconds = String.valueOf(currentTime % 60);
@@ -541,6 +547,9 @@ public class PlayerActivity extends AppCompatActivity
                 removeTrackFromLiked(trackId);
             } else {
                 addTrackToLiked(trackId);
+            }
+            if (refreshListener != null) {
+                refreshListener.onRefresh(); // Notify main activity/fragment to refresh
             }
         });
     }

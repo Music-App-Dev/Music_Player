@@ -59,7 +59,6 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
         holder.file_name.setText(track.getTrackName());
         holder.artist_name.setText(track.getArtistName());
         Glide.with(mContext).load(track.getAlbumImageUrl()).into(holder.album_art);
-
         holder.itemView.setOnClickListener(v -> {
             Intent intent = new Intent(mContext, PlayerActivity.class);
             intent.putExtra("position", position); // Pass the exact position

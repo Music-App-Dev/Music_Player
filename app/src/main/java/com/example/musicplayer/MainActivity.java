@@ -62,7 +62,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
-public class MainActivity extends AppCompatActivity implements SearchView.OnQueryTextListener {
+public class MainActivity extends AppCompatActivity implements SearchView.OnQueryTextListener, RefreshListener {
 
     public static final int REQUEST_CODE = 1;
     static ArrayList<SpotifyTrack> musicFiles = new ArrayList<>();
@@ -327,6 +327,12 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         });
     }
 
+    @Override
+    public void onRefresh() {
+        // Call methods to refresh the Spotify data, playlists, liked songs, etc.
+        fetchAllSpotifyData(); // Replace with your actual method to load data
+    }
+
     protected void startSpotifyAuth() {
         AuthorizationRequest.Builder builder = new AuthorizationRequest.Builder(CLIENT_ID, AuthorizationResponse.Type.TOKEN, REDIRECT_URI);
         builder.setScopes(new String[]{
@@ -335,6 +341,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                 "user-library-modify",
                 "user-modify-playback-state",
                 "playlist-modify-public",
+                "playlist-modify-private",
                 "playlist-read-collaborative",
                 "playlist-read-private",
                 "user-read-private"
@@ -547,119 +554,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     }
 
 
-    private void fetchTracksFromAlbums(ArrayList<SpotifyTrack> allTracks, HashSet<String> trackIds) {
-        String accessToken = getAccessToken();
-        OkHttpClient client = new OkHttpClient();
-
-        for (SpotifyItem album : combPlayAlbums) {
-            if (!(album instanceof SpotifyAlbum)) continue;  // Skip if not an album
-
-            Request albumTracksRequest = new Request.Builder()
-                    .url("https://api.spotify.com/v1/albums/" + album.getId() + "/tracks")
-                    .addHeader("Authorization", "Bearer " + accessToken)
-                    .build();
-
-            client.newCall(albumTracksRequest).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.e("MainActivity", "Failed to fetch tracks for album: " + album.getName(), e);
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        albumTracksFetched = 1;
-                        checkIfAllFetchesCompleted();
-                        String responseData = response.body().string();
-                        try {
-                            JSONObject jsonObject = new JSONObject(responseData);
-                            JSONArray items = jsonObject.getJSONArray("items");
-
-                            synchronized (allTracks) {
-                                for (int i = 0; i < items.length(); i++) {
-                                    JSONObject trackObject = items.getJSONObject(i);
-                                    String trackId = trackObject.getString("id");
-
-                                    if (!trackIds.contains(trackId)) {
-                                        allTracks.add(parseTrackObject(trackObject, album));
-                                        trackIds.add(trackId);
-                                    }
-                                }
-                            }
-
-                            Log.d("MainActivity", "Tracks fetched from album: " + album.getName() + ", Tracks: " + items.length());
-
-                        } catch (JSONException e) {
-                            Log.e("MainActivity", "Failed to parse album tracks JSON", e);
-                        }
-                    } else if (response.code() == 429) {
-                        String retryAfter = response.header("Retry-After");
-                        Log.e("MainActivity", "Rate limit exceeded. Retry after: " + retryAfter + " seconds.");
-                    } else {
-                        Log.e("MainActivity", "Failed with response code: " + response.code());
-                    }
-                }
-            });
-        }
-    }
-
-    private void fetchTracksFromPlaylists(ArrayList<SpotifyTrack> allTracks, HashSet<String> trackIds) {
-        String accessToken = getAccessToken();
-        OkHttpClient client = new OkHttpClient();
-        for (SpotifyItem item : combPlayAlbums) {
-            if (!(item instanceof SpotifyPlaylist)) continue;  // Skip if not a playlist
-
-            Request playlistTracksRequest = new Request.Builder()
-                    .url("https://api.spotify.com/v1/playlists/" + item.getId() + "/tracks")
-                    .addHeader("Authorization", "Bearer " + accessToken)
-                    .build();
-
-            client.newCall(playlistTracksRequest).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.e("PLAYLISTTESTING", "Failed to fetch tracks for playlist: " + item.getName(), e);
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        playlistTracksFetched = 1;
-                        checkIfAllFetchesCompleted();
-                        String responseData = response.body().string();
-                        try {
-                            JSONObject jsonObject = new JSONObject(responseData);
-                            JSONArray items = jsonObject.getJSONArray("items");
-
-                            synchronized (allTracks) {
-                                for (int i = 0; i < items.length(); i++) {
-                                    JSONObject trackWrapper = items.getJSONObject(i);
-                                    JSONObject trackObject = trackWrapper.getJSONObject("track");
-                                    String trackId = trackObject.getString("id");
-
-                                    if (!trackIds.contains(trackId)) {
-                                        allTracks.add(parseTrackPlaylistObject(trackObject));
-                                        trackIds.add(trackId);
-                                    }
-                                }
-                            }
-
-                            Log.d("MainActivity", "Tracks fetched from playlist: " + item.getName() + ", Tracks: " + items.length());
-
-                        } catch (JSONException e) {
-                            Log.e("MainActivity", "Failed to parse playlist tracks JSON", e);
-                        }
-                    } else if (response.code() == 429) {
-                        String retryAfter = response.header("Retry-After");
-                        Log.e("MainActivity", "Rate limit exceeded. Retry after: " + retryAfter + " seconds.");
-                    } else {
-                        Log.e("MainActivity", "Failed with response code: " + response.code());
-                    }
-                }
-
-            });
-        }
-    }
-
     private void checkAllFetchesCompleted() {
         if (allTracks.isEmpty() || combPlayAlbums.isEmpty()) {
             Log.d("MainActivity", "No tracks to display, playlists, or no albums found.");
@@ -685,29 +579,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         return new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId);
     }
 
-    private SpotifyTrack parseTrackPlaylistObject(JSONObject trackObject) throws JSONException {
-        // Extracting track details
-        String trackName = trackObject.optString("name", "Unknown Track");
-        String artistName = trackObject.getJSONArray("artists").optJSONObject(0).optString("name", "Unknown Artist");
-        String trackId = trackObject.optString("id", "");
-        String duration = trackObject.optString("duration_ms", "0");
-
-        // Extracting album details from the trackObject
-        JSONObject albumObject = trackObject.optJSONObject("album");
-        String albumName = (albumObject != null) ? albumObject.optString("name", "Unknown Album") : "Unknown Album";
-        String albumImageUrl = "No Image";
-        if (albumObject != null) {
-            JSONArray imagesArray = albumObject.optJSONArray("images");
-            if (imagesArray != null && imagesArray.length() > 0) {
-                albumImageUrl = imagesArray.optJSONObject(0).optString("url", "No Image");
-            }
-        }
-
-        // Return the SpotifyTrack object with the correct album image URL
-        return new SpotifyTrack(trackName, artistName, albumName, duration, albumImageUrl, trackId);
-    }
-
-
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -718,6 +589,13 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             startActivity(intent);
             return true;
         });
+
+        MenuItem refreshItem = menu.findItem((R.id.refresh_option));
+        refreshItem.setOnMenuItemClickListener(item -> {
+            loadSpotifyData();
+            return true;
+        });
+
         return super.onCreateOptionsMenu(menu);
     }
 

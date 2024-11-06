@@ -45,6 +45,15 @@
                     android:src="@drawable/ic_chevron_left"
                     android:layout_gravity="start|center_vertical"
                     android:padding="16dp" />
+
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:id="@+id/menu_btn"
+                    android:src="@drawable/ic_menu"
+                    android:layout_gravity="right"
+                    android:padding="16dp"
+                    android:layout_marginRight="10dp"/>
             </androidx.appcompat.widget.Toolbar>
 
             <!-- Title with outline -->

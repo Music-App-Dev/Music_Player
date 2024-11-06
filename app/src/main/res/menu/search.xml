@@ -7,6 +7,11 @@
         android:icon="@drawable/ic_menu_search_white"
         app:showAsAction="always"/>
     <item
+        android:title="@string/refresh"
+        android:id="@+id/refresh_option"
+        android:icon="@drawable/ic_refresh"
+        app:showAsAction="always"/>
+    <item
         android:title="@string/sort_by"
         android:id="@+id/sort_options"
         app:showAsAction="never">
