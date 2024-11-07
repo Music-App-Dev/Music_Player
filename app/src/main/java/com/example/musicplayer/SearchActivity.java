@@ -41,6 +41,11 @@ public class SearchActivity extends AppCompatActivity{
 
         // Setting up search bar
         SearchView searchView = findViewById(R.id.search_view);
+        searchView.setQueryHint("Search for your songs here");
+
+        searchView.setFocusable(true);
+        searchView.setIconified(false);  // Keeps the search bar expanded by default
+        searchView.setOnClickListener(view -> searchView.setIconified(false));
 
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override

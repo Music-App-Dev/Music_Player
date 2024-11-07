@@ -50,7 +50,7 @@
 
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="450dp"
+        android:layout_height="350dp"
         android:id="@+id/card"
         android:layout_below="@id/layout_top_btn">
 
@@ -161,8 +161,8 @@
         android:layout_alignParentEnd="true"
         android:layout_below="@id/seek_bar_layout">
         <ImageView
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:id="@+id/id_shuffle"
             android:src="@drawable/ic_shuffle_off"
             android:layout_centerVertical="true"
@@ -186,8 +186,8 @@
             android:layout_toEndOf="@+id/play_pause"
             android:layout_marginStart="16dp"/>
         <ImageView
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:id="@+id/id_repeat"
             android:src="@drawable/ic_repeat_off"
             android:layout_centerVertical="true"
