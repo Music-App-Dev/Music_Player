@@ -178,8 +178,8 @@
             android:layout_marginEnd="16dp"/>
 
         <ImageView
-            android:layout_width="80dp"
-            android:layout_height="80dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:id="@+id/id_next"
             android:src="@drawable/ic_skip_next"
             android:layout_centerVertical="true"

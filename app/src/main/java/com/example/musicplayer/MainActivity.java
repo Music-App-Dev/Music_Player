@@ -344,7 +344,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                 "playlist-modify-private",
                 "playlist-read-collaborative",
                 "playlist-read-private",
-                "user-read-private"
         });
 
         AuthorizationRequest request = builder.build();
