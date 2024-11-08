@@ -3,14 +3,13 @@
 An Android-based music player app built using Java, offering users the ability to browse, play, and control their favorite music tracks with a modern UI. This app showcases the usage of Android services, notifications, and media handling capabilities.
 
 ## 📜 Table of Contents
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-- [License](#license)
-
+- [Features](#-features)
+- [Screenshots](#-screenshots)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Project Structure](#-project-structure)
+- [Contributing](#-contributing)
+  
 ---
 
 ## 📌 Features
