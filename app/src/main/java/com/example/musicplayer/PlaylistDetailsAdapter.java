@@ -39,12 +39,6 @@ public class PlaylistDetailsAdapter extends RecyclerView.Adapter<PlaylistDetails
     public void onBindViewHolder(@NonNull MyHolder holder, int position) {
         SpotifyTrack track = playlistTracks.get(position);
 
-
-        // Log track details
-        Log.d("PlaylistDetailsAdapter", "Track Name: " + track.getTrackName());
-        Log.d("PlaylistDetailsAdapter", "Artist Name: " + track.getArtistName());
-        Log.d("PlaylistDetailsAdapter", "Album Image URL: " + track.getAlbumImageUrl());
-
         // Set track name and playlist name
         holder.track_name.setText(track.getTrackName());
         holder.artist_name.setText(track.getArtistName());

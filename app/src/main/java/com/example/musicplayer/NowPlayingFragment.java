@@ -56,7 +56,6 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
     public NowPlayingFragment() {
     }
 
-    private boolean isInitialized = false;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -149,7 +148,6 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
     }
 
     private void updateUI() {
-        isInitialized = true;
         if (musicService != null) {
             int currentPosition = position;
             ArrayList<SpotifyTrack> currentMusicFiles = musicFiles;
@@ -183,7 +181,6 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
         Log.d(TAG, "Service connected");
         MusicService.MyBinder binder = (MusicService.MyBinder) service;
         musicService = binder.getService();
-        isInitialized = true;
         // Check musicFiles after service is connected
         if (musicService != null) {
             Log.d(TAG, "Checking musicFiles and position after service connected.");
