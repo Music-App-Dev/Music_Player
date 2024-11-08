@@ -53,7 +53,9 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
     public static final String ARTIST_NAME = "ARTIST_NAME";
     public static final String SONG_NAME = "SONG_NAME";
 
-    public NowPlayingFragment() {}
+    public NowPlayingFragment() {
+    }
+
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -70,43 +72,6 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
 
         setDefaultUI();
 
-        view.setOnClickListener(v -> openPlayerActivity());
-
-        nextBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Log.d(TAG, "Next button clicked");
-                if (musicService != null) {
-                    Log.d(TAG, "MusicService is not null, invoking nextBtnClicked");
-                    PlayerActivity.position = 1;
-                    musicService.nextBtnClicked();
-                    if (getActivity() != null) {
-                        updateSharedPreferences();
-                        updateUI();
-                    } else {
-                        Log.e(TAG, "Activity is null");
-                    }
-                } else {
-                    Log.e(TAG, "MusicService is null");
-                }
-            }
-        });
-
-        playPauseBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Log.d(TAG, "PlayPause button clicked");
-                if (musicService != null) {
-                    musicService.playPauseButtonClicked();
-                    musicService.isPlaying(isPlaying -> {
-                        Log.d(TAG, "Is playing: " + isPlaying);
-                        playPauseBtn.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
-                    });
-                } else {
-                    Log.e(TAG, "MusicService is null");
-                }
-            }
-        });
         return view;
     }
 
@@ -216,13 +181,50 @@ public class NowPlayingFragment extends Fragment implements ServiceConnection {
         Log.d(TAG, "Service connected");
         MusicService.MyBinder binder = (MusicService.MyBinder) service;
         musicService = binder.getService();
-
         // Check musicFiles after service is connected
         if (musicService != null) {
             Log.d(TAG, "Checking musicFiles and position after service connected.");
             Log.d(TAG, "musicFiles size: " + (musicFiles != null ? musicFiles.size() : "null"));
             Log.d(TAG, "Current position: " + position);
         }
+
+        view.setOnClickListener(v -> openPlayerActivity());
+
+        nextBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "Next button clicked");
+                if (musicService != null) {
+                    Log.d(TAG, "MusicService is not null, invoking nextBtnClicked");
+                    PlayerActivity.position = 1;
+                    musicService.nextBtnClicked();
+                    if (getActivity() != null) {
+                        updateSharedPreferences();
+                        updateUI();
+                    } else {
+                        Log.e(TAG, "Activity is null");
+                    }
+                } else {
+                    Log.e(TAG, "MusicService is null");
+                }
+            }
+        });
+
+        playPauseBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "PlayPause button clicked");
+                if (musicService != null) {
+                    musicService.playPauseButtonClicked();
+                    musicService.isPlaying(isPlaying -> {
+                        Log.d(TAG, "Is playing: " + isPlaying);
+                        playPauseBtn.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
+                    });
+                } else {
+                    Log.e(TAG, "MusicService is null");
+                }
+            }
+        });
 
         updateUI();
     }

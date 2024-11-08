@@ -36,7 +36,8 @@
     <androidx.appcompat.widget.SearchView
         android:id="@+id/search_view"
         android:layout_marginTop="20dp"
-        android:layout_width="350dp"
+        android:layout_width="300dp"
+        style="@style/CustomSearchViewStyle"
         android:layout_height="wrap_content"
         android:layout_below="@id/search_return"
         android:queryHint="Search for songs"

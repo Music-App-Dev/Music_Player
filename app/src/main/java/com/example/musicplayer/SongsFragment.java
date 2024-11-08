@@ -37,10 +37,6 @@ public class SongsFragment extends Fragment {
         return view;
     }
 
-    public MusicAdapter getMusicAdapter() {
-        return musicAdapter; // Assuming musicAdapter is an instance variable in SongsFragment
-    }
-
     private ArrayList<SpotifyTrack> fullMusicList = new ArrayList<>();  // Store the full list here
 
     // Method to initialize or set the full list

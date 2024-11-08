@@ -274,11 +274,6 @@ public class SpotifyApiHelper {
                 String trackId = trackObject.getString("id");
                 String duration = trackObject.getString("duration_ms");
 
-                Log.d("SpotifyApiHelper", "Track Name: " + trackName);
-                Log.d("SpotifyApiHelper", "Artist Name: " + artistName);
-                Log.d("SpotifyApiHelper", "Track ID: " + trackId);
-                Log.d("SpotifyApiHelper", "Duration: " + duration);
-
                 // Extracting album details
                 JSONObject albumObject = trackObject.getJSONObject("album");
                 String albumName = albumObject.getString("name");

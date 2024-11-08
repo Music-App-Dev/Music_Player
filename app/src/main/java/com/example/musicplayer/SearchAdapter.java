@@ -29,10 +29,6 @@ public class SearchAdapter extends RecyclerView.Adapter<SearchAdapter.SearchView
         this.searchResults = searchResults;
     }
 
-    public interface OnItemClickListener {
-        void onItemClick(SpotifyTrack track);
-    }
-
 
 
     @NonNull

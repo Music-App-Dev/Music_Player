@@ -62,7 +62,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
 
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -110,6 +109,33 @@ public class PlayerActivity extends AppCompatActivity
             connectSpotifyRemote(accessToken);
         } else {
             startSpotifyAuth();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putInt("currentSong", position); // Save the song index
+        outState.putBoolean("shuffleBoolean", shuffleBoolean); // Save shuffle state
+        outState.putBoolean("repeatBoolean", repeatBoolean); // Save repeat state
+    }
+
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        if (savedInstanceState != null) {
+            int savedSongIndex = savedInstanceState.getInt("currentSong", 0);
+            shuffleBoolean = savedInstanceState.getBoolean("shuffleBoolean", false);
+            repeatBoolean = savedInstanceState.getBoolean("repeatBoolean", false);
+            seekBar.setProgress(savedSongIndex); // Restore seek position
+            position = savedSongIndex; // Restore the song index
+
+            // Resume playback from the saved position
+            if (musicService != null && spotifyAppRemote != null) {
+                musicService.playMedia(position, false);
+                spotifyAppRemote.getPlayerApi().seekTo(savedSongIndex);
+            }
+            shuffleBtn.setImageResource(shuffleBoolean ? R.drawable.ic_shuffle_on : R.drawable.ic_shuffle_off);
+            repeatBtn.setImageResource(repeatBoolean ? R.drawable.ic_repeat_on : R.drawable.ic_repeat_off);
         }
     }
 
@@ -437,9 +463,6 @@ public class PlayerActivity extends AppCompatActivity
         return new Random().nextInt(i + 1);
     }
 
-    public void setRefreshListener(RefreshListener listener) {
-        this.refreshListener = listener;
-    }
 
     private String formattedTime(int currentTime) {
         String minutes = String.valueOf(currentTime / 60);
