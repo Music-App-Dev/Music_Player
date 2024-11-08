@@ -38,6 +38,8 @@ An Android-based music player app built using Java, offering users the ability t
 ### Prerequisites
 - [Android Studio](https://developer.android.com/studio) installed.
 - An Android device or emulator with API level 34 or higher.
+- On the emulator, Spotify currently must be installed for the program to function.
+- Make sure to use the latest version of Android Studio or else the gradle will not sync properly.
 
 ### Steps
 
@@ -45,6 +47,7 @@ An Android-based music player app built using Java, offering users the ability t
    - Open a terminal and run:
      - `git clone https://github.com/your-username/music-player-app.git`
      - `cd music-player-app`
+   - You may also you Github Desktop for an easier time to set it up
 
 2. **Open in Android Studio**:
    - Launch **Android Studio**.
@@ -63,11 +66,14 @@ An Android-based music player app built using Java, offering users the ability t
 ## 🎮 Usage
 
 1. Launch the app on your device.
-2. Grant necessary permissions for accessing storage.
-3. Browse the music library.
+2. Sign in to your Spotify account and grant access to the application
+3. Either browse through your liked tracks, or albums/playlists.
 4. Tap on a track to start playback.
 5. Use media controls to play, pause, skip, or shuffle tracks.
-6. Control playback from the notification bar.
+6. Click the + button to add the song to your liked tracks. 
+7. Control playback from the notification bar.
+8. Click the refresh button to refresh the tracks or albums/playlists to update in real-time.
+9. Use the search feature to search for songs, and add them to your liked songs or into your playlists/albums.  
 
 ---
 
@@ -77,8 +83,7 @@ An Android-based music player app built using Java, offering users the ability t
   - `activities`: Activity classes
   - `adapters`: RecyclerView Adapters
   - `models`: Data models
-  - `services`: Media player service
-  - `utils`: Utility classes
+  - `services`: Spotify API service
 - `app/src/main/res/`: Layouts, drawables, etc.
 - `AndroidManifest.xml`
 - `build.gradle`
@@ -108,12 +113,6 @@ Contributions are welcome! Follow these steps:
 4. **Push to the branch**:
    - `git push origin feature/YourFeature`
 5. **Open a pull request**.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
