@@ -1,6 +1,6 @@
 package com.example.musicplayer;
 
-
+import com.example.musicplayer.MusicWrappedFragment;
 import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -30,7 +30,10 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentPagerAdapter;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.ViewPager;
+
 
 import com.google.android.material.tabs.TabLayout;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
@@ -61,6 +64,8 @@ import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+
+
 
 public class MainActivity extends AppCompatActivity implements SearchView.OnQueryTextListener, RefreshListener {
 
@@ -111,9 +116,17 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         String accessToken = getAccessToken();
         if (accessToken != null) {
             loadSpotifyData();  // Fetch albums and tracks immediately if already authenticated
+             // Fetch top artists
+            getUserTopSongs();
+
+            MusicWrappedFragment fragment = new MusicWrappedFragment();
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, fragment)
+                    .commit();
         }
 
-    }
+        }
+
 
     @Override
     protected void onNewIntent(Intent intent) {
@@ -284,6 +297,77 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         displayCombinedItems(); // Call the method to update the combined view
     }
 
+
+    private void getUserTopSongs() {
+        SharedPreferences sharedPreferences = getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        if (accessToken == null) {
+            Log.e("MainActivity", "Access token is null. Please authenticate.");
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/me/top/tracks?limit=20")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("MainActivity", "Failed to fetch top songs", e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    String responseData = response.body().string();
+                    try {
+                        JSONObject jsonObject = new JSONObject(responseData);
+                        JSONArray items = jsonObject.getJSONArray("items");
+                        ArrayList<SpotifyWrappedItem> topSongs = new ArrayList<>();
+
+                        for (int i = 0; i < items.length(); i++) {
+                            JSONObject songObject = items.getJSONObject(i);
+                            String songName = songObject.getString("name");
+                            String songId = songObject.getString("id");
+
+                            JSONObject albumObject = songObject.getJSONObject("album");
+
+                            JSONArray imagesArray = albumObject.getJSONArray("images");
+
+                            String imageUrl = imagesArray.getJSONObject(0).getString("url");
+
+                            JSONArray artistsArray = songObject.getJSONArray("artists");
+                            String artistName = artistsArray.getJSONObject(0).getString("name");
+
+                            topSongs.add(new SpotifyWrappedItem(songName, songId, "song", imageUrl, artistName));
+
+                        }
+
+                        runOnUiThread(() -> updateTopSongs(topSongs));
+
+                    } catch (JSONException e) {
+                        Log.e("MainActivity", "Failed to parse top songs JSON", e);
+                    }
+                }
+            }
+        });
+    }
+
+    private void updateTopSongs(ArrayList<SpotifyWrappedItem> topSongs) {
+        RecyclerView recyclerViewTopSongs = findViewById(R.id.recyclerViewTopSongs);
+        TopSongsAdapter topSongsAdapter = new TopSongsAdapter(this, topSongs);
+
+        recyclerViewTopSongs.setLayoutManager(new LinearLayoutManager(this));
+
+        recyclerViewTopSongs.setAdapter(topSongsAdapter);
+    }
+
+
+
+
     private void connectToSpotify() {
         ConnectionParams connectionParams = new ConnectionParams.Builder(CLIENT_ID)
                 .setRedirectUri(REDIRECT_URI)
@@ -364,6 +448,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                 "playlist-modify-private",
                 "playlist-read-collaborative",
                 "playlist-read-private",
+                "user-top-read"
         });
 
         AuthorizationRequest request = builder.build();
@@ -454,6 +539,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
 
         viewPagerAdapter.addFragments(new SongsFragment(), "Liked Songs");
         viewPagerAdapter.addFragments(new CombinedFragment(), "Albums/Playlists");
+        viewPagerAdapter.addFragments(new MusicWrappedFragment(), "Your Top 20");
 
         viewPager.setAdapter(viewPagerAdapter);
         tabLayout.setupWithViewPager(viewPager);
