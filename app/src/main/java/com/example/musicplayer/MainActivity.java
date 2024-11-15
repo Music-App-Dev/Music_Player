@@ -326,24 +326,25 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                     try {
                         JSONObject jsonObject = new JSONObject(responseData);
                         JSONArray items = jsonObject.getJSONArray("items");
-                        ArrayList<SpotifyWrappedItem> topSongs = new ArrayList<>();
+                        ArrayList<SpotifyTrack> topSongs = new ArrayList<>();
 
                         for (int i = 0; i < items.length(); i++) {
                             JSONObject songObject = items.getJSONObject(i);
                             String songName = songObject.getString("name");
                             String songId = songObject.getString("id");
 
+                            // Extract album information
                             JSONObject albumObject = songObject.getJSONObject("album");
-
                             JSONArray imagesArray = albumObject.getJSONArray("images");
-
                             String imageUrl = imagesArray.getJSONObject(0).getString("url");
 
                             JSONArray artistsArray = songObject.getJSONArray("artists");
                             String artistName = artistsArray.getJSONObject(0).getString("name");
 
-                            topSongs.add(new SpotifyWrappedItem(songName, songId, "song", imageUrl, artistName));
+                            String duration = songObject.getString("duration_ms");
 
+                            SpotifyTrack track = new SpotifyTrack(songName, artistName, albumObject.getString("name"), duration, imageUrl, songId);
+                            topSongs.add(track);
                         }
 
                         runOnUiThread(() -> updateTopSongs(topSongs));
@@ -356,14 +357,17 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         });
     }
 
-    private void updateTopSongs(ArrayList<SpotifyWrappedItem> topSongs) {
+    private void updateTopSongs(List<SpotifyTrack> topSongs) {
         RecyclerView recyclerViewTopSongs = findViewById(R.id.recyclerViewTopSongs);
-        TopSongsAdapter topSongsAdapter = new TopSongsAdapter(this, topSongs);
+
+        MusicAdapter musicAdapter = new MusicAdapter(this, new ArrayList<>(topSongs), getSupportFragmentManager());
 
         recyclerViewTopSongs.setLayoutManager(new LinearLayoutManager(this));
-
-        recyclerViewTopSongs.setAdapter(topSongsAdapter);
+        recyclerViewTopSongs.setAdapter(musicAdapter);
     }
+
+
+
 
 
 
