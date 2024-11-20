@@ -32,6 +32,7 @@ import com.google.android.material.snackbar.Snackbar;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder> {
 
@@ -43,6 +44,11 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
         this.mFiles = mFiles;
         this.mContext = mContext;
         this.fragmentManager = fragmentManager;
+    }
+
+    public void updateData(List<SpotifyTrack> newTracks) {
+        this.mFiles = new ArrayList<>(newTracks);
+        notifyDataSetChanged();
     }
 
 

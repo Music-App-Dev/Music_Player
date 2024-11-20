@@ -8,6 +8,10 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <TextView
         android:id="@+id/search_text"
@@ -21,6 +25,17 @@
         android:textSize="18sp"
         android:textColor="@color/colorAccent"
         android:background="?attr/selectableItemBackground" />
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerViewTopSongs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerViewTopArtists"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:scrollbars="vertical" />
+
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tab_layout"
@@ -47,6 +62,7 @@
         android:layout_height="70dp"
         android:layout_alignParentBottom="true"
         android:id="@+id/frag_bottom_player">
+
         <fragment
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
