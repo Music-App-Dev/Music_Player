@@ -3,16 +3,11 @@ package com.example.musicplayer;
 import static com.example.musicplayer.MainActivity.REQUEST_CODE;
 import static com.example.musicplayer.MainActivity.repeatBoolean;
 import static com.example.musicplayer.MainActivity.shuffleBoolean;
-import static com.example.musicplayer.MusicAdapter.mFiles;
 
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 
-import androidx.core.content.ContextCompat;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.palette.graphics.Palette;
 
 import android.content.ComponentName;
@@ -25,14 +20,11 @@ import android.graphics.Bitmap;
 
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 
 import android.util.Log;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.Animation;
@@ -50,7 +42,6 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
-import com.spotify.protocol.types.PlayerState;
 import com.spotify.sdk.android.auth.AuthorizationClient;
 import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
@@ -71,7 +62,7 @@ public class PlayerActivity extends AppCompatActivity
         implements ActionPlaying, ServiceConnection {
 
     private TextView song_name, artist_name, duration_played, duration_total;
-    private ImageView cover_art, nextBtn, prevBtn, backBtn, shuffleBtn, repeatBtn, addCircleIcon;
+    private ImageView cover_art, nextBtn, prevBtn, backBtn, queueAndHistoryBtn, shuffleBtn, repeatBtn, addCircleIcon;
     private FloatingActionButton playPauseBtn;
     private SeekBar seekBar;
     public static int position = -1;
@@ -312,6 +303,8 @@ public class PlayerActivity extends AppCompatActivity
 
         backBtn.setOnClickListener(v -> finish());
 
+        queueAndHistoryBtn.setOnClickListener(v -> queueAndHistoryBtnClicked());
+
         playPauseBtn.setOnClickListener(v -> playPauseBtnClicked());
 
         nextBtn.setOnClickListener(v -> nextBtnClicked());
@@ -459,6 +452,11 @@ public class PlayerActivity extends AppCompatActivity
         changeTrack(false);
     }
 
+    public void queueAndHistoryBtnClicked() {
+        Intent intent = new Intent(PlayerActivity.this, QueueAndHistoryActivity.class);
+        startActivity(intent);
+    }
+
     private int getRandom(int i) {
         return new Random().nextInt(i + 1);
     }
@@ -525,6 +523,7 @@ public class PlayerActivity extends AppCompatActivity
         nextBtn = findViewById(R.id.id_next);
         prevBtn = findViewById(R.id.id_prev);
         backBtn = findViewById(R.id.back_btn);
+        queueAndHistoryBtn = findViewById(R.id.menu_btn);
         shuffleBtn = findViewById(R.id.id_shuffle);
         repeatBtn = findViewById(R.id.id_repeat);
         playPauseBtn = findViewById(R.id.play_pause);
