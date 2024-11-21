@@ -46,10 +46,7 @@ public class MusicAdapter extends RecyclerView.Adapter<MusicAdapter.MyViewHolder
         this.fragmentManager = fragmentManager;
     }
 
-    public void updateData(List<SpotifyTrack> newTracks) {
-        this.mFiles = new ArrayList<>(newTracks);
-        notifyDataSetChanged();
-    }
+
 
 
     @NonNull
