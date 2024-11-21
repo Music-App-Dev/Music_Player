@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -31,7 +32,9 @@ public class MusicWrappedFragment extends Fragment {
         topSongsRecyclerView = view.findViewById(R.id.recyclerView);
         topSongsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext(), RecyclerView.VERTICAL, false));
 
-        topSongsAdapter = new TopSongsAdapter(getContext(), new ArrayList<>());
+        FragmentManager fragmentManager = getChildFragmentManager();
+
+        topSongsAdapter = new TopSongsAdapter(getContext(), new ArrayList<SpotifyTrack>(), fragmentManager);
         topSongsRecyclerView.setAdapter(topSongsAdapter);
 
         musicViewModel = new ViewModelProvider(this).get(TopSongsViewModel.class);
@@ -42,11 +45,10 @@ public class MusicWrappedFragment extends Fragment {
             }
         });
 
-
+        // Get the access token and fetch top songs
         SharedPreferences sharedPreferences = getActivity().getSharedPreferences("SpotifyAuth", getContext().MODE_PRIVATE);
         String accessToken = sharedPreferences.getString("access_token", null);
 
-        // Fetch top songs if access token is available
         if (accessToken != null) {
             musicViewModel.fetchTopSongs(accessToken);
         } else {
@@ -57,8 +59,8 @@ public class MusicWrappedFragment extends Fragment {
     }
 
     private void updateTopSongs(List<SpotifyTrack> songs) {
-        // Update the data in the adapter
         topSongsAdapter.updateData(songs);
     }
 }
+
 
