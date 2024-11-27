@@ -9,4 +9,8 @@
         android:title="Create Playlist"
         android:id="@+id/create_playlist"
         app:showAsAction="never"/>
+    <item
+        android:title="Add to Queue"
+        android:id="@+id/add_queue"
+        app:showAsAction="never"/>
 </menu>

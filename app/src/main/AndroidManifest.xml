@@ -36,7 +36,10 @@
             android:name=".PlayerActivity"
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize"/>
-
+        <activity android:name=".QueueAndRecentActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize"/>
         <activity android:name=".SearchActivity"
             android:exported="false"
             android:screenOrientation="portrait"

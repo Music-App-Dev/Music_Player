@@ -73,6 +73,45 @@ public class SpotifyApiHelper {
         });
     }
 
+    public static void fetchRecentlyPlayed(Context context, SpotifyPlaylistCallback callback) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
+        String accessToken = sharedPreferences.getString("access_token", null);
+
+        if (accessToken == null) {
+            callback.onFailure(new Exception("Access token is null or invalid"));
+            return;
+        }
+
+        OkHttpClient client = new OkHttpClient();
+
+        Request request = new Request.Builder()
+                .url("https://api.spotify.com/v1/me/player/recently-played?limit=40")
+                .addHeader("Authorization", "Bearer " + accessToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                callback.onFailure(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    try {
+                        String responseData = response.body().string();
+                        ArrayList<SpotifyTrack> tracks = parsePlaylistTracks(responseData);
+                        callback.onSuccess(tracks);
+                    } catch (Exception e) {
+                        callback.onFailure(e);
+                    }
+                } else {
+                    callback.onFailure(new Exception("Failed with response code: " + response.code()));
+                }
+            }
+        });
+    }
+
     public static void fetchPlaylistTracks(Context context, String playlistId, SpotifyPlaylistCallback callback) {
         SharedPreferences sharedPreferences = context.getSharedPreferences("SpotifyAuth", MODE_PRIVATE);
         String accessToken = sharedPreferences.getString("access_token", null);
