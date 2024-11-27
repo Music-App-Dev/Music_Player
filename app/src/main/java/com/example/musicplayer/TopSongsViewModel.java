@@ -20,14 +20,14 @@ import java.util.List;
 
 public class TopSongsViewModel extends AndroidViewModel {
 
-    private MutableLiveData<List<SpotifyTrack>> topSongsLiveData = new MutableLiveData<>();
+    private MutableLiveData<ArrayList<SpotifyTrack>> topSongsLiveData = new MutableLiveData<>();
     private boolean topSongsFetched = false;
 
     public TopSongsViewModel(Application application) {
         super(application);
     }
 
-    public LiveData<List<SpotifyTrack>> getTopSongs() {
+    public LiveData<ArrayList<SpotifyTrack>> getTopSongs() {
         return topSongsLiveData;
     }
 
@@ -55,7 +55,7 @@ public class TopSongsViewModel extends AndroidViewModel {
                     try {
                         JSONObject jsonObject = new JSONObject(responseData);
                         JSONArray items = jsonObject.getJSONArray("items");
-                        List<SpotifyTrack> topSongs = new ArrayList<>();
+                        ArrayList<SpotifyTrack> topSongs = new ArrayList<>();
 
                         for (int i = 0; i < items.length(); i++) {
                             JSONObject trackObject = items.getJSONObject(i);

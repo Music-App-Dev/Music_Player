@@ -62,7 +62,7 @@ public class PlayerActivity extends AppCompatActivity
         implements ActionPlaying, ServiceConnection {
 
     private TextView song_name, artist_name, duration_played, duration_total;
-    private ImageView cover_art, nextBtn, prevBtn, backBtn, queueAndHistoryBtn, shuffleBtn, repeatBtn, addCircleIcon;
+    private ImageView cover_art, nextBtn, prevBtn, backBtn, queueAndHistoryBtn, shuffleBtn, repeatBtn, addCircleIcon, queueBtn;
     private FloatingActionButton playPauseBtn;
     private SeekBar seekBar;
     public static int position = -1;
@@ -299,6 +299,12 @@ public class PlayerActivity extends AppCompatActivity
             saveRepeatState(repeatBoolean);
         });
 
+        queueBtn.setOnClickListener(v -> {
+            SpotifyTrack currentTrack = getCurrentTrack();
+            QueueManager.addTrackToQueue(currentTrack);
+            Toast.makeText(this, "Added to Queue: " + currentTrack.getTrackName(), Toast.LENGTH_SHORT).show();
+        });
+
         addCircleIcon.setOnClickListener(v -> toggleLike());
 
         backBtn.setOnClickListener(v -> finish());
@@ -331,6 +337,15 @@ public class PlayerActivity extends AppCompatActivity
                 handler.post(updateSeekBarRunnable); // Resume automatic updates
             }
         });
+    }
+
+    private SpotifyTrack getCurrentTrack() {
+        if (listSongs != null && position >= 0 && position < listSongs.size()) {
+            return listSongs.get(position);
+        } else {
+            Log.e("PlayerActivity", "Invalid position or empty list.");
+            return null; // Handle invalid cases gracefully
+        }
     }
 
     private final Runnable updateSeekBarRunnable = new Runnable() {
@@ -453,7 +468,7 @@ public class PlayerActivity extends AppCompatActivity
     }
 
     public void queueAndHistoryBtnClicked() {
-        Intent intent = new Intent(PlayerActivity.this, QueueAndHistoryActivity.class);
+        Intent intent = new Intent(PlayerActivity.this, QueueAndRecentActivity.class);
         startActivity(intent);
     }
 
@@ -524,6 +539,7 @@ public class PlayerActivity extends AppCompatActivity
         prevBtn = findViewById(R.id.id_prev);
         backBtn = findViewById(R.id.back_btn);
         queueAndHistoryBtn = findViewById(R.id.menu_btn);
+        queueBtn = findViewById(R.id.id_queue);
         shuffleBtn = findViewById(R.id.id_shuffle);
         repeatBtn = findViewById(R.id.id_repeat);
         playPauseBtn = findViewById(R.id.play_pause);

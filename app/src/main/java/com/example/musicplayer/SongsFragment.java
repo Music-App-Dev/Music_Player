@@ -31,7 +31,7 @@ public class SongsFragment extends Fragment {
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext(), RecyclerView.VERTICAL, false));
 
         // Initialize the adapter with an empty list initially
-        musicAdapter = new MusicAdapter(getContext(), musicFiles, getChildFragmentManager());
+        musicAdapter = new MusicAdapter(getContext(), musicFiles);
         recyclerView.setAdapter(musicAdapter);
 
         return view;

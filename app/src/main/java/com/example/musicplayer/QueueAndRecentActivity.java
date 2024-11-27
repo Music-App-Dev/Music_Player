@@ -1,10 +1,8 @@
 package com.example.musicplayer;
 
 import android.os.Bundle;
-import android.view.View;
 import android.widget.ImageView;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
@@ -17,7 +15,7 @@ import com.google.android.material.tabs.TabLayout;
 import java.util.ArrayList;
 import java.util.List;
 
-public class QueueAndHistoryActivity extends AppCompatActivity {
+public class QueueAndRecentActivity extends AppCompatActivity {
 
     private TabLayout tabLayout;
     private ViewPager viewPager;

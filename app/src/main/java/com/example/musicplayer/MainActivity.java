@@ -1,23 +1,15 @@
 package com.example.musicplayer;
 
-import com.example.musicplayer.MusicWrappedFragment;
 import android.Manifest;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -40,17 +32,11 @@ import com.spotify.android.appremote.api.SpotifyAppRemote;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
-import com.spotify.android.appremote.api.SpotifyAppRemote;
 
-import com.spotify.protocol.client.Subscription;
-import com.spotify.protocol.types.PlayerState;
-import com.spotify.protocol.types.Track;
 import com.spotify.sdk.android.auth.AuthorizationClient;
 import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
@@ -93,10 +79,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     private boolean albumsFetched = false;
     private boolean playlistsFetched = false;
 
-    private int likedTracksFetched = 0;
-    private int albumTracksFetched = 0;
-    private int playlistTracksFetched = 0;
-
     private ArrayList<SpotifyTrack> allTracks = new ArrayList<>();
     private HashSet<String> trackIds = new HashSet<>();
 
@@ -119,7 +101,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
              // Fetch top artists
             getUserTopSongs();
 
-            MusicWrappedFragment fragment = new MusicWrappedFragment();
+            TopSongsFragment fragment = new TopSongsFragment();
             getSupportFragmentManager().beginTransaction()
                     .replace(R.id.fragment_container, fragment)
                     .commit();
@@ -360,17 +342,11 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
     private void updateTopSongs(List<SpotifyTrack> topSongs) {
         RecyclerView recyclerViewTopSongs = findViewById(R.id.recyclerViewTopSongs);
 
-        MusicAdapter musicAdapter = new MusicAdapter(this, new ArrayList<>(topSongs), getSupportFragmentManager());
+        MusicAdapter musicAdapter = new MusicAdapter(this, new ArrayList<>(topSongs));
 
         recyclerViewTopSongs.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewTopSongs.setAdapter(musicAdapter);
     }
-
-
-
-
-
-
 
     private void connectToSpotify() {
         ConnectionParams connectionParams = new ConnectionParams.Builder(CLIENT_ID)
@@ -417,7 +393,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
         getUserSavedPlaylists();
     }
 
-
     private void displayCombinedItems() {
         runOnUiThread(() -> {
             CombinedFragment combinedFragment = (CombinedFragment) viewPagerAdapter.getFragment(1); // Adjust the index to match the position of CombinedFragment
@@ -452,7 +427,8 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                 "playlist-modify-private",
                 "playlist-read-collaborative",
                 "playlist-read-private",
-                "user-top-read"
+                "user-top-read",
+                "user-read-recently-played"
         });
 
         AuthorizationRequest request = builder.build();
@@ -543,7 +519,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
 
         viewPagerAdapter.addFragments(new SongsFragment(), "Liked Songs");
         viewPagerAdapter.addFragments(new CombinedFragment(), "Albums/Playlists");
-        viewPagerAdapter.addFragments(new MusicWrappedFragment(), "Your Top 20");
+        viewPagerAdapter.addFragments(new TopSongsFragment(), "Your Top 20");
 
         viewPager.setAdapter(viewPagerAdapter);
         tabLayout.setupWithViewPager(viewPager);
@@ -596,7 +572,7 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
 
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
-                .url("https://api.spotify.com/v1/me/tracks")
+                .url("https://api.spotify.com/v1/me/tracks?limit=50")
                 .addHeader("Authorization", "Bearer " + accessToken)
                 .build();
 
@@ -610,8 +586,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (response.isSuccessful()) {
-                    likedTracksFetched = 1;
-                    checkIfAllFetchesCompleted();
 
                     String responseData = response.body().string();
                     try {
@@ -646,20 +620,6 @@ public class MainActivity extends AppCompatActivity implements SearchView.OnQuer
                 }
             }
         });
-    }
-
-    private void checkIfAllFetchesCompleted() {
-        Log.d("CHECKFETCH", "FETCH CHECK: " + likedTracksFetched + " ALBUM " + albumTracksFetched + "PLAYLISTS" + playlistTracksFetched);
-        if (likedTracksFetched > 0 && albumTracksFetched > 0 && playlistTracksFetched > 0) {
-            runOnUiThread(() -> {
-                SharedPreferences preferences = getSharedPreferences(MY_SORT_PREF, MODE_PRIVATE);
-                String sortOrder = preferences.getString("sorting", "sortByName");
-                sortSpotifyTracks(allTracks, sortOrder);
-                displayTracks(allTracks);
-            });
-        } else {
-            Log.d("MainActivity", "Waiting for all fetches to complete.");
-        }
     }
 
 

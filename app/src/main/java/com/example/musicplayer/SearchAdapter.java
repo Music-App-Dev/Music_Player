@@ -56,6 +56,10 @@ public class SearchAdapter extends RecyclerView.Adapter<SearchAdapter.SearchView
             intent.putParcelableArrayListExtra("trackList", searchResults); // Pass the full list of tracks
             mContext.startActivity(intent);
         });
+
+        holder.menuMore.setOnClickListener(v -> {
+            PopupMenuHelper.showPopupMenu(mContext, v, track);
+        });
     }
 
 
@@ -68,12 +72,13 @@ public class SearchAdapter extends RecyclerView.Adapter<SearchAdapter.SearchView
         TextView songTitle;
         TextView artistName;
 
-        ImageView albumUrl;
+        ImageView albumUrl, menuMore;
         public SearchViewHolder(@NonNull View itemView) {
             super(itemView);
             songTitle = itemView.findViewById(R.id.music_file_name);
             artistName = itemView.findViewById(R.id.artist_name);
             albumUrl = itemView.findViewById(R.id.music_img);
+            menuMore = itemView.findViewById(R.id.menuMore);
         }
     }
 }
