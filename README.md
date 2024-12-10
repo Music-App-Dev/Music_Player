@@ -14,21 +14,21 @@ An Android-based music player app built using Java, offering users the ability t
 
 ## 📌 Features
 
-- **Music Library**: Browse all audio files stored on your device.
-- **Media Controls**: Play, pause, skip, and repeat tracks with ease.
+- **Music Library**: Browse all audio files from the Spotify API.
+- **Media Controls**: Play, pause, skip, shuffle, and repeat tracks with ease.
 - **Background Playback**: Listen to music while using other apps.
-- **Shuffle & Repeat**: Toggle shuffle mode or loop a single track.
-- **Notifications**: Interactive media notification for controlling playback.
+- **Queue and Recently Played**: Add songs to a queue and also view your recently played songs.
 - **Album Art**: Displays album artwork for each track.
 
 ---
 
 ## 📷 Screenshots
-![image](https://github.com/user-attachments/assets/247364b1-d944-4ba7-83d3-101e64748c22)
-![image](https://github.com/user-attachments/assets/c0848c69-4e6a-4f40-b09a-0023f74c81de)
-![image](https://github.com/user-attachments/assets/758e7c5f-54d1-44bb-a687-7f8928e26f90)
-![image](https://github.com/user-attachments/assets/82e465a0-3b9c-4ff1-bd54-3d3d082e1dd3)
-
+![image](https://github.com/user-attachments/assets/f14f46aa-20d4-4cf2-b1c3-b9ad131a2ad6)
+![image](https://github.com/user-attachments/assets/a9dc0c8c-0701-49d2-a015-84dce312d529)
+![image](https://github.com/user-attachments/assets/f3d11ff7-2437-4bbb-9f73-ec95a5ec3541)
+![image](https://github.com/user-attachments/assets/c88b94a6-2b15-4788-935f-3c0ecca10b2c)
+![image](https://github.com/user-attachments/assets/b66d77e5-4fbf-475e-b130-dc65e7d60722)
+![image](https://github.com/user-attachments/assets/ca5ab0be-b3b3-45b6-85d2-f855863ae3c0)
 
 ---
 
@@ -38,7 +38,7 @@ An Android-based music player app built using Java, offering users the ability t
 - [Android Studio](https://developer.android.com/studio) installed.
 - An Android device or emulator with API level 34 or higher.
 - On the emulator, Spotify currently must be installed for the program to function.
-- Make sure to use the latest version of Android Studio or else the gradle will not sync properly.
+- User must have Spotify Premium in order for the playback to function correctly
 
 ### Steps
 
@@ -46,7 +46,7 @@ An Android-based music player app built using Java, offering users the ability t
    - Open a terminal and run:
      - `git clone https://github.com/your-username/music-player-app.git`
      - `cd music-player-app`
-   - You may also you Github Desktop for an easier time to set it up
+   - You may also you Github Desktop for an easier set up by cloning
 
 2. **Open in Android Studio**:
    - Launch **Android Studio**.
@@ -68,11 +68,10 @@ An Android-based music player app built using Java, offering users the ability t
 2. Sign in to your Spotify account and grant access to the application
 3. Either browse through your liked tracks, or albums/playlists.
 4. Tap on a track to start playback.
-5. Use media controls to play, pause, skip, or shuffle tracks.
+5. Use media controls to play, pause, skip, repeat, or shuffle tracks.
 6. Click the + button to add the song to your liked tracks. 
-7. Control playback from the notification bar.
-8. Click the refresh button to refresh the tracks or albums/playlists to update in real-time.
-9. Use the search feature to search for songs, and add them to your liked songs or into your playlists/albums.  
+7. Click the refresh button to refresh the tracks or albums/playlists to update in real-time.
+8. Use the search feature to search for songs, and add them to your liked songs or into your playlists/albums.  
 
 ---
 
